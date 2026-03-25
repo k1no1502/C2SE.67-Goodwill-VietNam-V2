@@ -27,7 +27,7 @@
 ## 🎓 Academic Information | Thông tin đồ án
 
 - **EN**: Capstone 2 — **Duy Tan University (DTU)**
-- **VI**: Đồ án **Capstone 1 — Đại học Duy Tân**
+- **VI**: Đồ án **Capstone 2 — Đại học Duy Tân**
 
 ### 👥 Team | Nhóm thực hiện: **C2SE.67**
 **Members | Thành viên**
@@ -206,8 +206,8 @@ goodwill-vietnam/
 
 ## 📜 License | Giấy phép
 
-**EN**: This project is developed for **educational purposes (Capstone 1 — DTU)** and is not intended for commercial use.  
-**VI**: Dự án phục vụ **mục đích học tập (Capstone 1 — DTU)**, không dùng cho mục đích thương mại.
+**EN**: This project is developed for **educational purposes (Capstone 2 — DTU)** and is not intended for commercial use.  
+**VI**: Dự án phục vụ **mục đích học tập (Capstone 2 — DTU)**, không dùng cho mục đích thương mại.
 
 ---
 
