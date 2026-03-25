@@ -310,10 +310,10 @@ include 'includes/header.php';
                 <p class="about-sub mb-0">Các con người đứng sau hành trình kết nối cộng đồng</p>
             </div>
             <div class="row g-3">
-                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><h6 class="fw-bold mb-1">Lê Văn Vũ Phong</h6><small class="text-muted">Scrum Master</small></div></div>
-                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><h6 class="fw-bold mb-1">Võ Đình Dương</h6><small class="text-muted">Product Owner</small></div></div>
-                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><h6 class="fw-bold mb-1">Nguyễn Thành Đạt</h6><small class="text-muted">Development</small></div></div>
-                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><h6 class="fw-bold mb-1">Hằng Gia Bảo</h6><small class="text-muted">Development</small></div></div>
+                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><div class="team-avatar"><i class="bi bi-person-circle"></i></div><h6 class="fw-bold mb-1">Lê Văn Vũ Phong</h6><small class="text-muted">Scrum Master</small></div></div>
+                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><div class="team-avatar"><i class="bi bi-person-circle"></i></div><h6 class="fw-bold mb-1">Võ Đình Dương</h6><small class="text-muted">Product Owner</small></div></div>
+                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><div class="team-avatar"><i class="bi bi-person-circle"></i></div><h6 class="fw-bold mb-1">Nguyễn Thành Đạt</h6><small class="text-muted">Development</small></div></div>
+                <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><div class="team-avatar"><i class="bi bi-person-circle"></i></div><h6 class="fw-bold mb-1">Hằng Gia Bảo</h6><small class="text-muted">Development</small></div></div>
             </div>
         </section>
 
