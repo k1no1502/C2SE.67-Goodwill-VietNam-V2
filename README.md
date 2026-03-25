@@ -27,7 +27,7 @@
 ## 🎓 Academic Information | Thông tin đồ án
 
 - **EN**: Capstone 2 — **Duy Tan University (DTU)**
-- **VI**: Đồ án **Capstone 1 — Đại học Duy Tân**
+- **VI**: Đồ án **Capstone 2 — Đại học Duy Tân**
 
 ### 👥 Team | Nhóm thực hiện: **C2SE.67**
 **Members | Thành viên**
