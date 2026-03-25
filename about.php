@@ -157,7 +157,7 @@ include 'includes/header.php';
 .team-avatar {
     width: 80px;
     height: 80px;
-    border-radius: 999px;
+    border-radius: 1000px;
     margin: 0 auto 0.8rem;
     background: #e3f2f7;
     color: #0e7490;
@@ -307,7 +307,7 @@ include 'includes/header.php';
         <section class="mb-4">
             <div class="text-center mb-4">
                 <h2 class="about-section-title mb-2">Đội ngũ của chúng tôi</h2>
-                <p class="about-sub mb-0">Những con người đứng sau hành trình kết nối cộng đồng</p>
+                <p class="about-sub mb-0">Các con người đứng sau hành trình kết nối cộng đồng</p>
             </div>
             <div class="row g-3">
                 <div class="col-6 col-md-4 col-lg-3"><div class="team-card"><h6 class="fw-bold mb-1">Lê Văn Vũ Phong</h6><small class="text-muted">Scrum Master</small></div></div>
