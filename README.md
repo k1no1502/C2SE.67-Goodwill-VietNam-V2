@@ -1,9 +1,9 @@
-# 🌱 Goodwill Vietnam  
-## 🎓 Capstone 1 – Duy Tan University (DTU)
+# ?? Goodwill Vietnam  
+## ?? Capstone 2 – Duy Tan University (DTU)
 
 <p align="center">
-  <b>✨ Digital charity platform — Connecting donations, transparency, and impact ✨</b><br/>
-  <i>✨ Nền tảng thiện nguyện số — Kết nối quyên góp, minh bạch tiến độ, lan tỏa giá trị ✨</i>
+  <b>? Digital charity platform — Connecting donations, transparency, and impact ?</b><br/>
+  <i>? N?n t?ng thi?n nguy?n s? — K?t n?i quyên góp, minh b?ch ti?n d?, lan t?a giá tr? ?</i>
 </p>
 
 <p align="center">
@@ -16,70 +16,70 @@
 
 ---
 
-## 📌 Project Overview | Tổng quan dự án
+## ?? Project Overview | T?ng quan d? án
 
-**EN**: **Goodwill Vietnam** is a web-based charity platform designed to **connect donors, recipients, and administrators** in one centralized system. The project supports the full lifecycle of donations: **submission → approval → warehouse intake → distribution**, helping improve transparency, operational efficiency, and tracking.
+**EN**: **Goodwill Vietnam** is a web-based charity platform designed to **connect donors, recipients, and administrators** in one centralized system. The project supports the full lifecycle of donations: **submission ? approval ? warehouse intake ? distribution**, helping improve transparency, operational efficiency, and tracking.
 
-**VI**: **Goodwill Vietnam** là website thiện nguyện nhằm **kết nối người quyên góp, người nhận và quản trị viên** trên một hệ thống tập trung. Hệ thống hỗ trợ toàn bộ vòng đời quyên góp: **gửi → duyệt → nhập kho → phân phối**, tăng tính minh bạch, tối ưu vận hành và dễ theo dõi tiến độ.
+**VI**: **Goodwill Vietnam** là website thi?n nguy?n nh?m **k?t n?i ngu?i quyên góp, ngu?i nh?n và qu?n tr? viên** trên m?t h? th?ng t?p trung. H? th?ng h? tr? toàn b? vòng d?i quyên góp: **g?i ? duy?t ? nh?p kho ? phân ph?i**, tang tính minh b?ch, t?i uu v?n hành và d? theo dõi ti?n d?.
 
 ---
 
-## 🎓 Academic Information | Thông tin đồ án
+## ?? Academic Information | Thông tin d? án
 
 - **EN**: Capstone 1 — **Duy Tan University (DTU)**
-- **VI**: Đồ án **Capstone 1 — Đại học Duy Tân**
+- **VI**: Ð? án **Capstone 1 — Ð?i h?c Duy Tân**
 
-### 👥 Team | Nhóm thực hiện: **C1SE.30**
+### ?? Team | Nhóm th?c hi?n: **C1SE.30**
 **Members | Thành viên**
-- **Lê Văn Vũ Phong**
-- **Võ Đình Dương**
-- **Huỳnh Như Lộc**
-- **Ngô Quốc Trung**
-- **Hằng Gia Bảo**
+- **Lê Van Vu Phong**
+- **Võ Ðình Duong**
+- **Hu?nh Nhu L?c**
+- **Nguy?n Thành Ð?t**
+- **H?ng Gia B?o**
 
 ---
 
-## ✨ Key Features | Tính năng nổi bật
+## ? Key Features | Tính nang n?i b?t
 
-### ❤️ Donation Management | Quản lý quyên góp
+### ?? Donation Management | Qu?n lý quyên góp
 - **EN**: Create donation items, upload images, and import from Excel/CSV.
-- **VI**: Tạo nhiều vật phẩm, upload ảnh, nhập nhanh bằng Excel/CSV.
+- **VI**: T?o nhi?u v?t ph?m, upload ?nh, nh?p nhanh b?ng Excel/CSV.
 
-### 📦 Donation Tracking | Theo dõi tiến trình quyên góp
-- **EN**: Track progress by status: **Submitted → Approved → Stored → Distributed**.
-- **VI**: Theo dõi theo trạng thái: **Gửi → Duyệt → Nhập kho → Phân phối**.
+### ?? Donation Tracking | Theo dõi ti?n trình quyên góp
+- **EN**: Track progress by status: **Submitted ? Approved ? Stored ? Distributed**.
+- **VI**: Theo dõi theo tr?ng thái: **G?i ? Duy?t ? Nh?p kho ? Phân ph?i**.
 
-### 🏪 Inventory & Warehouse | Kho vật phẩm
+### ?? Inventory & Warehouse | Kho v?t ph?m
 - **EN**: Categorize items, set item type/price (free/low-cost/normal), assign to campaigns.
-- **VI**: Phân loại, định giá (miễn phí/giá rẻ/giá thường), gắn với chiến dịch.
+- **VI**: Phân lo?i, d?nh giá (mi?n phí/giá r?/giá thu?ng), g?n v?i chi?n d?ch.
 
-### 🎯 Campaigns & Volunteers | Chiến dịch & Tình nguyện viên
+### ?? Campaigns & Volunteers | Chi?n d?ch & Tình nguy?n viên
 - **EN**: Online campaign registration and campaign progress updates.
-- **VI**: Đăng ký tham gia trực tuyến, cập nhật và theo dõi tiến độ chiến dịch.
+- **VI**: Ðang ký tham gia tr?c tuy?n, c?p nh?t và theo dõi ti?n d? chi?n d?ch.
 
-### 📊 Admin Dashboard | Bảng điều khiển quản trị
+### ?? Admin Dashboard | B?ng di?u khi?n qu?n tr?
 - **EN**: Visual insights with charts; manage users, donations, inventory, and campaigns.
-- **VI**: Thống kê trực quan bằng biểu đồ; quản lý người dùng, quyên góp, kho, chiến dịch.
+- **VI**: Th?ng kê tr?c quan b?ng bi?u d?; qu?n lý ngu?i dùng, quyên góp, kho, chi?n d?ch.
 
-### 🛒 Charity Shop | Shop thiện nguyện
+### ?? Charity Shop | Shop thi?n nguy?n
 - **EN**: Product browsing, cart, **COD checkout**, and order tracking.
-- **VI**: Duyệt sản phẩm, giỏ hàng, **thanh toán COD**, theo dõi đơn hàng.
+- **VI**: Duy?t s?n ph?m, gi? hàng, **thanh toán COD**, theo dõi don hàng.
 
 ---
 
-## 🛠️ Technologies | Công nghệ sử dụng
+## ??? Technologies | Công ngh? s? d?ng
 
-| Layer / Tầng | EN | VI |
+| Layer / T?ng | EN | VI |
 |---|---|---|
-| Frontend | HTML5, CSS3, Bootstrap 5, JavaScript | Giao diện web responsive, dễ dùng |
-| Backend | PHP 8.x (PDO, Session) | Xử lý nghiệp vụ, phân quyền, API/AJAX |
-| Database | MySQL 8.x (**managed via phpMyAdmin**) | MySQL 8.x (**quản lý bằng phpMyAdmin**) |
-| Charts | Chart.js | Biểu đồ thống kê |
-| Architecture | Simple MVC + Admin/API modules | MVC đơn giản + module Admin/API |
+| Frontend | HTML5, CSS3, Bootstrap 5, JavaScript | Giao di?n web responsive, d? dùng |
+| Backend | PHP 8.x (PDO, Session) | X? lý nghi?p v?, phân quy?n, API/AJAX |
+| Database | MySQL 8.x (**managed via phpMyAdmin**) | MySQL 8.x (**qu?n lý b?ng phpMyAdmin**) |
+| Charts | Chart.js | Bi?u d? th?ng kê |
+| Architecture | Simple MVC + Admin/API modules | MVC don gi?n + module Admin/API |
 
 ---
 
-## ⚙️ System Requirements | Yêu cầu hệ thống
+## ?? System Requirements | Yêu c?u h? th?ng
 
 **EN**
 - Apache/Nginx (XAMPP/WAMP/LAMP/Laragon supported)
@@ -88,28 +88,28 @@
 - Modern browser: Chrome / Edge / Firefox
 
 **VI**
-- Apache/Nginx (hỗ trợ XAMPP/WAMP/LAMP/Laragon)
-- PHP **>= 8.0** (bật: `pdo_mysql`, `mbstring`, `zip`)
+- Apache/Nginx (h? tr? XAMPP/WAMP/LAMP/Laragon)
+- PHP **>= 8.0** (b?t: `pdo_mysql`, `mbstring`, `zip`)
 - MySQL **>= 8.0**
-- Trình duyệt hiện đại: Chrome / Edge / Firefox
+- Trình duy?t hi?n d?i: Chrome / Edge / Firefox
 
 ---
 
-## 🚀 Quick Start | Cài đặt nhanh
+## ?? Quick Start | Cài d?t nhanh
 
-### 1) Clone Source Code | Tải mã nguồn
+### 1) Clone Source Code | T?i mã ngu?n
 ```bash
 cd C:\laragon\www
 git clone <repo-url> goodwill-vietnam
 ```
 
-### 2) Create Database via phpMyAdmin | Tạo CSDL bằng phpMyAdmin
-- Open | Mở: `http://localhost/phpmyadmin`
-- Create DB | Tạo DB: `goodwill_vietnam`
-- Charset | Bộ mã: `utf8mb4_unicode_ci`
+### 2) Create Database via phpMyAdmin | T?o CSDL b?ng phpMyAdmin
+- Open | M?: `http://localhost/phpmyadmin`
+- Create DB | T?o DB: `goodwill_vietnam`
+- Charset | B? mã: `utf8mb4_unicode_ci`
 - Import | Import: `database/schema.sql`
 
-### 3) Configure DB | Cấu hình DB
+### 3) Configure DB | C?u hình DB
 File: `config/database.php`
 ```php
 define('DB_HOST', 'localhost');
@@ -118,49 +118,49 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 ```
 
-### 4) Permissions | Phân quyền
-- Ensure folder is writable | Cấp quyền ghi: `uploads/`
+### 4) Permissions | Phân quy?n
+- Ensure folder is writable | C?p quy?n ghi: `uploads/`
 
-### 5) Run | Chạy hệ thống
+### 5) Run | Ch?y h? th?ng
 ```
 http://localhost/goodwill-vietnam
 ```
 
 ---
 
-## 📂 Project Structure | Cấu trúc thư mục
+## ?? Project Structure | C?u trúc thu m?c
 
 ```
 goodwill-vietnam/
-│
-├── admin/              # Admin: dashboard, donations, inventory...
-├── api/                # Lightweight endpoints for AJAX
-├── assets/             # CSS, JS, images, templates
-├── config/             # database.php
-├── database/           # schema, seed
-├── includes/           # common header/footer/functions
-├── uploads/            # donation/campaign images
-│
-├── donate.php
-├── donation-tracking.php
-├── order-tracking.php
-└── index.php
+¦
++-- admin/              # Admin: dashboard, donations, inventory...
++-- api/                # Lightweight endpoints for AJAX
++-- assets/             # CSS, JS, images, templates
++-- config/             # database.php
++-- database/           # schema, seed
++-- includes/           # common header/footer/functions
++-- uploads/            # donation/campaign images
+¦
++-- donate.php
++-- donation-tracking.php
++-- order-tracking.php
++-- index.php
 ```
 
 ---
 
-## 🔐 Demo Account | Tài khoản mẫu
+## ?? Demo Account | Tài kho?n m?u
 
-| Role / Vai trò | Email | Password / Mật khẩu |
+| Role / Vai trò | Email | Password / M?t kh?u |
 |---|---|---|
 | Admin | admin@goodwillvietnam.com | password |
 
 > **EN**: Please change the admin password after first run.  
-> **VI**: Nên đổi mật khẩu admin sau khi chạy lần đầu.
+> **VI**: Nên d?i m?t kh?u admin sau khi ch?y l?n d?u.
 
 ---
 
-## 🔒 Security Notes | Ghi chú bảo mật
+## ?? Security Notes | Ghi chú b?o m?t
 
 **EN**
 - Password hashing with `password_hash`
@@ -169,14 +169,14 @@ goodwill-vietnam/
 - File upload validation (type/size)
 
 **VI**
-- Mã hóa mật khẩu bằng `password_hash`
-- PDO Prepared Statements chống SQL Injection
-- Xác thực & phân quyền bằng Session
-- Kiểm tra upload (định dạng/kích thước)
+- Mã hóa m?t kh?u b?ng `password_hash`
+- PDO Prepared Statements ch?ng SQL Injection
+- Xác th?c & phân quy?n b?ng Session
+- Ki?m tra upload (d?nh d?ng/kích thu?c)
 
 ---
 
-## 🔄 Operational Flow | Luồng vận hành
+## ?? Operational Flow | Lu?ng v?n hành
 
 **EN**
 1. User submits a donation  
@@ -186,32 +186,32 @@ goodwill-vietnam/
 5. Donor can track progress online
 
 **VI**
-1. Người dùng gửi quyên góp  
-2. Admin duyệt và xác nhận  
-3. Nhập kho vật phẩm  
-4. Phân phối theo chiến dịch/đối tượng nhận  
-5. Người quyên góp theo dõi tiến trình trực tuyến
+1. Ngu?i dùng g?i quyên góp  
+2. Admin duy?t và xác nh?n  
+3. Nh?p kho v?t ph?m  
+4. Phân ph?i theo chi?n d?ch/d?i tu?ng nh?n  
+5. Ngu?i quyên góp theo dõi ti?n trình tr?c tuy?n
 
 ---
 
-## 📈 Future Improvements | Hướng phát triển
+## ?? Future Improvements | Hu?ng phát tri?n
 
 - Online payments (VNPay/MoMo) | Thanh toán online (VNPay/MoMo)
 - Real-time notifications | Thông báo realtime
-- Export reports (PDF/Excel) | Xuất báo cáo (PDF/Excel)
+- Export reports (PDF/Excel) | Xu?t báo cáo (PDF/Excel)
 - Public RESTful API | API RESTful công khai
-- Mobile app | Ứng dụng mobile
+- Mobile app | ?ng d?ng mobile
 
 ---
 
-## 📜 License | Giấy phép
+## ?? License | Gi?y phép
 
 **EN**: This project is developed for **educational purposes (Capstone 1 — DTU)** and is not intended for commercial use.  
-**VI**: Dự án phục vụ **mục đích học tập (Capstone 1 — DTU)**, không dùng cho mục đích thương mại.
+**VI**: D? án ph?c v? **m?c dích h?c t?p (Capstone 1 — DTU)**, không dùng cho m?c dích thuong m?i.
 
 ---
 
 <p align="center">
-  💖 <b>Goodwill Vietnam — Share kindness, build impact.</b><br/>
-  💖 <b>Goodwill Vietnam — Kết nối sẻ chia, lan tỏa yêu thương.</b>
+  ?? <b>Goodwill Vietnam — Share kindness, build impact.</b><br/>
+  ?? <b>Goodwill Vietnam — K?t n?i s? chia, lan t?a yêu thuong.</b>
 </p>
