@@ -13,7 +13,7 @@ include 'includes/header.php';
 }
 .about-hero {
     background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
-    border-radius: 24px;
+    border-radius: 25px;
     color: #fff;
     padding: 3rem 2.2rem;
     position: relative;
