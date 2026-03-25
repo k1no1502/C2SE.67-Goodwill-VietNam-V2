@@ -31,11 +31,11 @@
 
 ### ?? Team | Nhóm th?c hi?n: **C1SE.30**
 **Members | Thành viên**
-- **Lê Van Vu Phong**
-- **Võ Ðình Duong**
-- **Hu?nh Nhu L?c**
-- **Nguy?n Thành Ð?t**
-- **H?ng Gia B?o**
+- **Le Van Vu Phong**
+- **Vo Dinh Duong**
+- **Huynh Nhu Loc**
+- **Nguyen Thanh Dat**
+- **Hang Gia Bao**
 
 ---
 
