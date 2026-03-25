@@ -1,0 +1,12 @@
+{
+    "da nang|unknown_district": {
+        "code": "district_da_nang",
+        "name": "Kho trung chuyển Đà Nẵng",
+        "address": "Đà Nẵng, Việt Nam",
+        "city": "Đà Nẵng",
+        "district": "",
+        "lat": 16.068,
+        "lng": 108.212,
+        "auto_generated": true
+    }
+}
