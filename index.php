@@ -299,6 +299,7 @@ include 'includes/header.php';
                         <p class="text-muted mb-0">Tạo tài khoản miễn phí trong vài giây và cá nhân hóa hồ sơ của bạn.</p>
                     </div>
                 </div>
+                //command new codeing 
                 <div class="d-flex gap-4 mb-4 align-items-start">
                     <div class="d-flex flex-column align-items-center">
                         <div class="step-circle">2</div>
@@ -351,7 +352,7 @@ include 'includes/header.php';
             </div>
             <h2 class="mb-3">Bắt đầu hành trình thiện nguyện<br class="d-none d-md-block">của bạn hôm nay</h2>
             <p class="mb-4 opacity-85" style="font-size:1.05rem; max-width:500px; margin:0 auto 1.5rem;">
-                Mỗi đóng góp dù nhỏ đều tạo ra sự thay đổi lớn. Hãy cùng chúng tôi lan toả điều tốt đẹp.
+                Mỗi đóng góp dù nhỏ đều tạo ra sự thay đổi lớn. Hãy cùng chúng tôi lan toả những  điều tốt đẹp.
             </p>
             <div class="d-flex justify-content-center flex-wrap gap-3">
                 <?php if (!$isLoggedIn): ?>
