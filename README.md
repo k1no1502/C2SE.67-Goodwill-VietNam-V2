@@ -34,7 +34,7 @@
 - **Lê Văn Vũ Phong**
 - **Võ Đình Dương**
 - **Huỳnh Như Lộc**
-- **DNguyen Thanh Dat**
+- **DNguyễn Thành Đạt**
 - **Hằng Gia Bảo**
 
 ---
