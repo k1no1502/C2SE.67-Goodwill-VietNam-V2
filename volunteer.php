@@ -51,15 +51,16 @@ include 'includes/header.php';
 }
 
 .volunteer-hero {
-    background: linear-gradient(135deg, var(--volunteer-primary) 0%, #2497b4 100%);
-    border-radius: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.24);
+    background:
+        linear-gradient(135deg, rgba(14, 74, 92, 0.54) 0%, rgba(25, 121, 146, 0.38) 100%),
+        url('https://www.ymca.org/sites/default/files/2025-07/2025_06_10_youthgovcon_2068.jpg');
+    background-size: cover;
+    background-position: center 34%;
+    background-repeat: no-repeat;
     color: #fff;
     padding: 4rem 2.5rem;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 26px 70px rgba(18, 92, 114, 0.24), 0 10px 24px rgba(16, 90, 113, 0.12);
-    margin-bottom: 3.5rem;
 }
 
 .volunteer-hero > * {
@@ -79,23 +80,19 @@ include 'includes/header.php';
 .volunteer-hero::before {
     content: '';
     position: absolute;
-    width: 400px;
-    height: 400px;
-    right: -100px;
-    top: -100px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 70%);
+    inset: 0;
+    background: linear-gradient(90deg, rgba(7, 43, 54, 0.3) 0%, rgba(7, 43, 54, 0.08) 46%, rgba(255,255,255,0.02) 100%);
 }
 
 .volunteer-hero::after {
     content: '';
     position: absolute;
-    width: 200px;
-    height: 200px;
-    left: -50px;
-    bottom: -50px;
+    width: 260px;
+    height: 260px;
+    right: 4%;
+    top: 10%;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%);
+    background: radial-gradient(circle, rgba(123, 231, 255, 0.22), transparent 72%);
 }
 
 .volunteer-hero-content {
@@ -107,14 +104,14 @@ include 'includes/header.php';
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: rgba(255,255,255,0.25);
-    border: 1px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.34);
     border-radius: 999px;
     padding: 0.5rem 1.2rem;
     font-size: 0.9rem;
     font-weight: 600;
     margin-bottom: 1.5rem;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
 }
 
 .stats-grid {
@@ -126,13 +123,13 @@ include 'includes/header.php';
 }
 
 .stat-card {
-    background: linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
-    border: 1px solid rgba(255,255,255,0.24);
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.1));
+    border: 1px solid rgba(255,255,255,0.2);
     border-radius: 16px;
     padding: 1.5rem;
     text-align: center;
     backdrop-filter: blur(20px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 16px 30px rgba(9, 72, 93, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 16px 30px rgba(9, 72, 93, 0.18);
     position: relative;
 }
 
@@ -547,10 +544,10 @@ include 'includes/header.php';
 }
 </style>
 
-<div class="volunteer-page pt-4 pb-5">
+<div class="volunteer-page pb-5">
     <!-- Hero Section -->
-    <div class="container">
-        <section class="volunteer-hero">
+    <section class="volunteer-hero">
+        <div class="container">
             <div class="volunteer-hero-content">
                 <div class="hero-badge">
                     <i class="bi bi-star-fill"></i>
@@ -576,11 +573,11 @@ include 'includes/header.php';
                     </div>
                 </div>
             </div>
-        </section>
-    </div>
+        </div>
+    </section>
 
     <!-- Campaigns Section -->
-    <div class="container my-5">
+    <div class="container py-5">
         <div class="campaigns-header">
             <h2 class="campaigns-title">
                 <i class="bi bi-megaphone me-2" style="color: #177e9a;"></i>Chiến dịch đang tuyển tình nguyện viên

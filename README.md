@@ -1,231 +1,217 @@
-# 💚 Goodwill Vietnam - Nền tảng Tình nguyện Số
+# 🌱 Goodwill Vietnam  
+## 🎓 Capstone 2 – Duy Tan University (DTU)
 
-Goodwill Vietnam là website tình nguyện trực tuyến, kết nối người tặng & người nhận & ban vận hành chủ yếu với **PHP 8 + MySQL + HTML/CSS/JS + Bootstrap 5**. Giúp các tổ chức phi lợi nhuận quản lý quyên góp, kho vật phẩm, chiến dịch và tình nguyện viên trên một hệ thống duy nhất.
+<p align="center">
+  <b>✨ Digital charity platform — Connecting donations, transparency, and impact ✨</b><br/>
+  <i>✨ Nền tảng thiện nguyện số — Kết nối quyên góp, minh bạch tiến độ, lan tỏa giá trị ✨</i>
+</p>
 
-## 📋 Mục lục
-- [✨ Tính năng nổi bật](#-tính-năng-nổi-bật)
-- [🛠 Công nghệ sử dụng](#-công-nghệ-sử-dụng)
-- [⚙️ Yêu cầu hệ thống](#️-yêu-cầu-hệ-thống)
-- [🚀 Hướng dẫn cài đặt nhanh](#-hướng-dẫn-cài-đặt-nhanh)
-- [📁 Cấu trúc thư mục](#-cấu-trúc-thư-mục)
-- [👤 Tài khoản mẫu](#-tài-khoản-mẫu)
-- [💡 Chi tiết chức năng](#-chi-tiết-chức-năng)
-- [🔒 Bảo mật & Tuân thủ](#-bảo-mật--tuân-thủ)
-- [📊 Hướng dẫn Database Import](#-hướng-dẫn-database-import)
-- [📞 Hỗ trợ & Tài liệu](#-hỗ-trợ--tài-liệu)
-
----
-
-## ✨ Tính năng nổi bật
-
-- **Form quyên góp thông minh**: Tạo nhiều vật phẩm, upload ảnh/link, nhập hàng loạt từ Excel/CSV
-- **Theo dõi quyên góp**: Hiển thị tiến trình duyệt, nhập kho, phân phối bằng timeline & phần trăm hoàn thành
-- **Shop tình nguyện**: Lọc danh mục, loại giá, giỏ hàng, thanh toán COD, tra cứu trạng thái giao hàng
-- **Admin Dashboard**: Thống kê realtime, Chart.js, nhật ký hoạt động
-- **Chiến dịch + Tình nguyện viên**: Đăng ký, cập nhật tiến độ, quản lý vật phẩm
-- **Kho vật phẩm**: Duyệt quyên góp, định giá, quản lý tồn
+<p align="center">
+  <img alt="PHP" src="https://img.shields.io/badge/PHP-8.x-777BB4?logo=php&logoColor=white"/>
+  <img alt="MySQL" src="https://img.shields.io/badge/MySQL-8.x-4479A1?logo=mysql&logoColor=white"/>
+  <img alt="phpMyAdmin" src="https://img.shields.io/badge/phpMyAdmin-Database%20Admin-6C78AF?logo=phpmyadmin&logoColor=white"/>
+  <img alt="Scrum" src="https://img.shields.io/badge/Scrum-Agile-0A66C2?logo=scrumalliance&logoColor=white"/>
+  <img alt="Capstone" src="https://img.shields.io/badge/Capstone%201-DTU-2EA44F?logo=graduationcap&logoColor=white"/>
+</p>
 
 ---
 
-## 🛠 Công nghệ sử dụng
+## 📌 Project Overview | Tổng quan dự án
 
-| Tầng | Công nghệ |
-|------|-----------|
-| **Frontend** | HTML5, CSS3, Bootstrap 5, JavaScript, Chart.js, Leaflet |
-| **Backend** | PHP 8.x (PDO, Session, REST API) |
-| **Database** | MySQL 8.x (utf8mb4) |
-| **Thư viện** | Bootstrap Icons, PhpSpreadsheet, ZipArchive |
+**EN**: **Goodwill Vietnam** is a web-based charity platform designed to **connect donors, recipients, and administrators** in one centralized system. The project supports the full lifecycle of donations: **submission → approval → warehouse intake → distribution**, helping improve transparency, operational efficiency, and tracking.
+
+**VI**: **Goodwill Vietnam** là website thiện nguyện nhằm **kết nối người quyên góp, người nhận và quản trị viên** trên một hệ thống tập trung. Hệ thống hỗ trợ toàn bộ vòng đời quyên góp: **gửi → duyệt → nhập kho → phân phối**, tăng tính minh bạch, tối ưu vận hành và dễ theo dõi tiến độ.
 
 ---
 
-## ⚙️ Yêu cầu hệ thống
+## 🎓 Academic Information | Thông tin đồ án
 
-- **Web Server**: Apache/Nginx (XAMPP, WAMP/LAMP hoặc Laragon)
-- **PHP**: >= 8.0 (PDO, mbstring, zip, iconv)
-- **MySQL**: >= 8.0, charset utf8mb4
-- **Trình duyệt**: Chrome, Edge, Firefox (2023+)
+- **EN**: Capstone 2 — **Duy Tan University (DTU)**
+- **VI**: Đồ án **Capstone 2 — Đại học Duy Tân**
+
+### 👥 Team | Nhóm thực hiện: **C2SE.67**
+**Members | Thành viên**
+- **Lê Văn Vũ Phong**
+- **Võ Đình Dương**
+- **Huỳnh Như Lộc**
+- **DNguyễn Thành Đạt**
+- **Hằng Gia Bảo**
 
 ---
 
-## 🚀 Hướng dẫn cài đặt nhanh
+## ✨ Key Features | Tính năng nổi bật
 
-### **Bước 1: Clone mã nguồn**
+### ❤️ Donation Management | Quản lý quyên góp
+- **EN**: Create donation items, upload images, and import from Excel/CSV.
+- **VI**: Tạo nhiều vật phẩm, upload ảnh, nhập nhanh bằng Excel/CSV.
+
+### 📦 Donation Tracking | Theo dõi tiến trình quyên góp
+- **EN**: Track progress by status: **Submitted → Approved → Stored → Distributed**.
+- **VI**: Theo dõi theo trạng thái: **Gửi → Duyệt → Nhập kho → Phân phối**.
+
+### 🏪 Inventory & Warehouse | Kho vật phẩm
+- **EN**: Categorize items, set item type/price (free/low-cost/normal), assign to campaigns.
+- **VI**: Phân loại, định giá (miễn phí/giá rẻ/giá thường), gắn với chiến dịch.
+
+### 🎯 Campaigns & Volunteers | Chiến dịch & Tình nguyện viên
+- **EN**: Online campaign registration and campaign progress updates.
+- **VI**: Đăng ký tham gia trực tuyến, cập nhật và theo dõi tiến độ chiến dịch.
+
+### 📊 Admin Dashboard | Bảng điều khiển quản trị
+- **EN**: Visual insights with charts; manage users, donations, inventory, and campaigns.
+- **VI**: Thống kê trực quan bằng biểu đồ; quản lý người dùng, quyên góp, kho, chiến dịch.
+
+### 🛒 Charity Shop | Shop thiện nguyện
+- **EN**: Product browsing, cart, **COD checkout**, and order tracking.
+- **VI**: Duyệt sản phẩm, giỏ hàng, **thanh toán COD**, theo dõi đơn hàng.
+
+---
+
+## 🛠️ Technologies | Công nghệ sử dụng
+
+| Layer / Tầng | EN | VI |
+|---|---|---|
+| Frontend | HTML5, CSS3, Bootstrap 5, JavaScript | Giao diện web responsive, dễ dùng |
+| Backend | PHP 8.x (PDO, Session) | Xử lý nghiệp vụ, phân quyền, API/AJAX |
+| Database | MySQL 8.x (**managed via phpMyAdmin**) | MySQL 8.x (**quản lý bằng phpMyAdmin**) |
+| Charts | Chart.js | Biểu đồ thống kê |
+| Architecture | Simple MVC + Admin/API modules | MVC đơn giản + module Admin/API |
+
+---
+
+## ⚙️ System Requirements | Yêu cầu hệ thống
+
+**EN**
+- Apache/Nginx (XAMPP/WAMP/LAMP/Laragon supported)
+- PHP **>= 8.0** (enable: `pdo_mysql`, `mbstring`, `zip`)
+- MySQL **>= 8.0**
+- Modern browser: Chrome / Edge / Firefox
+
+**VI**
+- Apache/Nginx (hỗ trợ XAMPP/WAMP/LAMP/Laragon)
+- PHP **>= 8.0** (bật: `pdo_mysql`, `mbstring`, `zip`)
+- MySQL **>= 8.0**
+- Trình duyệt hiện đại: Chrome / Edge / Firefox
+
+---
+
+## 🚀 Quick Start | Cài đặt nhanh
+
+### 1) Clone Source Code | Tải mã nguồn
 ```bash
-cd C:\xampp\htdocs
-git clone <repo-url> "GW_VN Ver Final"
+cd C:\laragon\www
+git clone <repo-url> goodwill-vietnam
 ```
 
-### **Bước 2: Tạo database**
-1. Mở phpMyAdmin
-2. Tạo database `goodwill_vietnam` (utf8mb4)
-3. Import các file từ thư mục `database/`:
-   - `schema.sql` (BẮT BUỘC)
-   - `update_schema.sql` (BẮT BUỘC)
-   - `campaigns_simple.sql` (BẮT BUỘC CHO CHIẾN DỊCH)
+### 2) Create Database via phpMyAdmin | Tạo CSDL bằng phpMyAdmin
+- Open | Mở: `http://localhost/phpmyadmin`
+- Create DB | Tạo DB: `goodwill_vietnam`
+- Charset | Bộ mã: `utf8mb4_unicode_ci`
+- Import | Import: `database/schema.sql`
 
-### **Bước 3: Cấu hình** (config/database.php)
+### 3) Configure DB | Cấu hình DB
+File: `config/database.php`
 ```php
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'goodwill_vietnam');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
 ```
 
-### **Bước 4: Cấp quyền thư mục**
-- Thư mục `uploads/` - CHMOD 755
-- Thư mục `cache/` - CHMOD 755
+### 4) Permissions | Phân quyền
+- Ensure folder is writable | Cấp quyền ghi: `uploads/`
 
-### **Bước 5: Truy cập**
+### 5) Run | Chạy hệ thống
 ```
-http://localhost/GW_VN%20Ver%20Final/
-```
-
----
-
-## 📁 Cấu trúc thư mục
-
-```
-GW_VN Ver Final/
-├── admin/               # Quản trị: dashboard, donations, inventory...
-├── api/                 # Endpoint AJAX/REST API
-├── assets/              # CSS, JS, hình ảnh
-├── config/              # database.php
-├── database/            # Schema SQL
-├── includes/            # header, footer, functions
-├── tools/               # Công cụ hỗ trợ
-├── uploads/             # Hình ảnh (ghi được)
-├── Test/                # File test cases
-├── donate.php           # Form quyên góp
-├── shop.php             # Trang Shop
-├── order-tracking.php   # Theo dõi đơn hàng
-├── index.php            # Trang chủ
-└── Readme.md            # Tài liệu này (Consolidated)
+http://localhost/goodwill-vietnam
 ```
 
 ---
 
-## 👤 Tài khoản mẫu
+## 📂 Project Structure | Cấu trúc thư mục
 
-| Loại | Email | Mật khẩu |
-|------|-------|----------|
+```
+goodwill-vietnam/
+│
+├── admin/              # Admin: dashboard, donations, inventory...
+├── api/                # Lightweight endpoints for AJAX
+├── assets/             # CSS, JS, images, templates
+├── config/             # database.php
+├── database/           # schema, seed
+├── includes/           # common header/footer/functions
+├── uploads/            # donation/campaign images
+│
+├── donate.php
+├── donation-tracking.php
+├── order-tracking.php
+└── index.php
+```
+
+---
+
+## 🔐 Demo Account | Tài khoản mẫu
+
+| Role / Vai trò | Email | Password / Mật khẩu |
+|---|---|---|
 | Admin | admin@goodwillvietnam.com | password |
-| Staff | staff@goodwillvietnam.com | password |
-| User | Từ đăng ký | Tự do |
 
-> ⚠️ **Đổi mật khẩu admin ngay sau khi khởi chạy!**
-
----
-
-## 💡 Chi tiết chức năng
-
-### **👥 Người dùng**
-- Quyên góp: Nhập tay atau Excel/CSV
-- Shop: Lọc danh mục, giỏ hàng, COD
-- Chiến dịch: Đăng ký tình nguyện
-- Tài khoản: Hồ sơ, mật khẩu, lịch sử
-
-### **🔐 Quản trị viên**
-- Duyệt quyên góp, ghi chú
-- Quản lý kho: Định giá, trạng thái
-- Quản lý đơn hàng, chiến dịch
-- Dashboard thống kê realtime
-- Xuất báo cáo Excel/PDF
+> **EN**: Please change the admin password after first run.  
+> **VI**: Nên đổi mật khẩu admin sau khi chạy lần đầu.
 
 ---
 
-## 🔒 Bảo mật
+## 🔒 Security Notes | Ghi chú bảo mật
 
-- Mật khẩu: Băm bcrypt
-- SQL: PDO Prepared Statements
-- Phân quyền: Kiểm tra trên mỗi trang
-- Validation: Email, số điện thoại, MIME type
-- Encoding: UTF-8, charset utf8mb4
+**EN**
+- Password hashing with `password_hash`
+- PDO Prepared Statements to prevent SQL Injection
+- Session-based authentication & authorization
+- File upload validation (type/size)
 
----
-
-## 📊 Hướng dẫn Database Import
-
-### **Thứ tự import (BẮT BUỘC)**
-
-**Bước 1: Tạo database**
-```sql
-CREATE DATABASE goodwill_vietnam 
-CHARACTER SET utf8mb4 
-COLLATE utf8mb4_unicode_ci;
-```
-
-**Bước 2: Import các file (ĐÚNG THỨ TỰ)**
-
-1. **schema.sql** (BẮT BUỘC)
-   - Tạo: users, roles, donations, categories, inventory
-
-2. **update_schema.sql** (BẮT BUỘC)
-   - Thêm: cart, orders, order_items
-
-3. **campaigns_simple.sql** (BẮT BUỘC CHO CHIẾN DỊCH)
-   - Thêm: campaign_items, campaign_donations
-
-4. **check_and_fix.sql** (TÙY CHỌN)
-   - Fix: Sync quyên góp vào inventory
-
-### **Các file trong database/**
-
-| File | Mô tả | Status |
-|------|-------|--------|
-| schema.sql | Cấu trúc cơ bản | ✅ BẮT BUỘC |
-| update_schema.sql | Shop + giỏ hàng | ✅ BẮT BUỘC |
-| campaigns_simple.sql | Chiến dịch | ✅ BẮT BUỘC |
-| check_and_fix.sql | Fix sync | ⚠️ Khi cần |
-
-### **Kiểm tra sau import**
-
-```sql
-SELECT COUNT(*) FROM information_schema.TABLES 
-WHERE TABLE_SCHEMA = 'goodwill_vietnam';
-```
-**Kết quả:** ≥ 15 tables
-
-### **Xử lý lỗi**
-
-#### ❌ "Duplicate column name"
-- Bỏ qua (không ảnh hưởng)
-
-#### ❌ "Table already exists"
-- Bỏ qua (SQL dùng IF NOT EXISTS)
-
-#### ❌ "Foreign key constraint fails"
-- Import sai thứ tự → Drop database & import lại
-
-#### ❌ Vật phẩm không hiện trong Shop
-- Chạy `check_and_fix.sql` để sync
+**VI**
+- Mã hóa mật khẩu bằng `password_hash`
+- PDO Prepared Statements chống SQL Injection
+- Xác thực & phân quyền bằng Session
+- Kiểm tra upload (định dạng/kích thước)
 
 ---
 
-## 🎯 Quy trình vận hành
+## 🔄 Operational Flow | Luồng vận hành
 
-1. **Quyên góp**: Gửi đơn → Duyệt → Nhập kho → Phân phối → Theo dõi
-2. **Shop**: Chọn sản phẩm → Giỏ hàng → COD → Giao → Theo dõi
-3. **Chiến dịch**: Tạo → Kêu gọi → Theo dõi → Báo cáo
+**EN**
+1. User submits a donation  
+2. Admin reviews and approves  
+3. Items are received into warehouse  
+4. Items are distributed to campaigns/recipients  
+5. Donor can track progress online
 
----
-
-## 📞 Hỗ trợ & Tài liệu
-
-### **Debugging**
-- Log lỗi: `apache/logs/error.log`
-- Database: `config/database.php`
-- Uploads: Kiểm tra quyền ghi
-
-### **Tài liệu bổ sung**
-- [INSTALL.txt](INSTALL.txt) - Checklist cài đặt
-- [QUICK_START.md](QUICK_START.md) - Hướng dẫn nhanh
-- [Test/](Test/) - File test cases
+**VI**
+1. Người dùng gửi quyên góp  
+2. Admin duyệt và xác nhận  
+3. Nhập kho vật phẩm  
+4. Phân phối theo chiến dịch/đối tượng nhận  
+5. Người quyên góp theo dõi tiến trình trực tuyến
 
 ---
 
-**✨ Chúc bạn triển khai nền tảng tình nguyện thành công!**
+## 📈 Future Improvements | Hướng phát triển
 
-**Made with ❤️ by Goodwill Vietnam Team**
+- Online payments (VNPay/MoMo) | Thanh toán online (VNPay/MoMo)
+- Real-time notifications | Thông báo realtime
+- Export reports (PDF/Excel) | Xuất báo cáo (PDF/Excel)
+- Public RESTful API | API RESTful công khai
+- Mobile app | Ứng dụng mobile
 
-*Last updated: March 2026*
+---
+
+## 📜 License | Giấy phép
+
+**EN**: This project is developed for **educational purposes (Capstone 2 — DTU)** and is not intended for commercial use.  
+**VI**: Dự án phục vụ **mục đích học tập (Capstone 2 — DTU)**, không dùng cho mục đích thương mại.
+
+---
+
+<p align="center">
+  💖 <b>Goodwill Vietnam — Share kindness, build impact.</b><br/>
+  💖 <b>Goodwill Vietnam — Kết nối sẻ chia, lan tỏa yêu thương.</b>
+</p>
