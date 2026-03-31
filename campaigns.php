@@ -32,27 +32,113 @@ include 'includes/header.php';
 
 <style>
 .campaigns-page {
-    background: radial-gradient(circle at 7% 9%, rgba(14, 116, 144, 0.12), transparent 28%), #f6fbfd;
+    background: #d0d8de;
+    min-height: 100vh;
 }
 .campaigns-hero {
     background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
     color: #fff;
-    border-radius: 22px;
-    padding: 2.2rem;
+    padding: 64px 0 48px;
     position: relative;
     overflow: hidden;
 }
-.campaigns-hero::after {
+.campaigns-hero::before {
     content: '';
     position: absolute;
-    right: -60px;
-    top: -40px;
-    width: 220px;
-    height: 220px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.2), transparent 65%);
+    inset: 0;
+    background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
 }
-.hero-title { font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 800; margin: 0; }
-.hero-sub { opacity: 0.9; margin-top: 0.5rem; }
+.campaigns-hero-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+}
+.hero-main {
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+}
+.hero-icon-box {
+    width: 134px;
+    height: 134px;
+    border-radius: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    backdrop-filter: blur(6px);
+}
+.hero-icon-box i {
+    font-size: 3.8rem;
+    color: rgba(255, 255, 255, 0.95);
+}
+.hero-title {
+    font-size: clamp(2.4rem, 5.2vw, 5rem);
+    line-height: 1.05;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+.hero-sub {
+    opacity: 0.88;
+    margin-top: 0.7rem;
+    margin-bottom: 0;
+    font-size: clamp(1.05rem, 1.7vw, 2.05rem);
+    max-width: 940px;
+}
+.campaigns-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 1.15rem;
+}
+.campaign-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 999px;
+    padding: 0.76rem 1.45rem;
+    font-weight: 700;
+    white-space: nowrap;
+    word-break: keep-all;
+    min-width: 250px;
+    width: auto;
+}
+@media (max-width: 991.98px) {
+    .campaigns-hero {
+        padding: 38px 0 34px;
+    }
+    .hero-main {
+        gap: 1rem;
+    }
+    .hero-icon-box {
+        width: 90px;
+        height: 90px;
+        border-radius: 20px;
+    }
+    .hero-icon-box i {
+        font-size: 2.45rem;
+    }
+    .hero-title {
+        font-size: clamp(1.8rem, 8vw, 2.8rem);
+    }
+    .hero-sub {
+        font-size: 1rem;
+    }
+    .campaigns-toolbar {
+        justify-content: stretch;
+    }
+    .campaign-action-btn {
+        width: 100%;
+        min-width: 0;
+        text-align: center;
+    }
+}
 
 .mini-stat {
     border: 1px solid #d0e8ef;
@@ -149,25 +235,35 @@ include 'includes/header.php';
 }
 </style>
 
-<div class="campaigns-page pt-5 mt-4 pb-5">
+<div class="campaigns-hero">
+    <div class="container">
+        <div class="campaigns-hero-row">
+            <div class="hero-main">
+                <div class="hero-icon-box">
+                    <i class="bi bi-megaphone"></i>
+                </div>
+                <div>
+                    <h1 class="hero-title">Chiến dịch thiện nguyện</h1>
+                    <p class="hero-sub">Tham gia các chiến dịch ý nghĩa và tạo ra tác động tích cực cho cộng đồng</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="campaigns-page pb-5">
 <div class="container py-4">
 
-    <div class="campaigns-hero mb-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div>
-                <h1 class="hero-title"><i class="bi bi-megaphone-fill me-2"></i>Chiến dịch thiện nguyện</h1>
-                <p class="hero-sub mb-0">Tham gia các chiến dịch ý nghĩa và tạo ra tác động tích cực cho cộng đồng</p>
-            </div>
-            <?php if (isLoggedIn()): ?>
-                <a href="create-campaign.php" class="btn btn-light fw-bold px-4 py-2 rounded-pill">
-                    <i class="bi bi-plus-circle me-2"></i>Tạo chiến dịch mới
-                </a>
-            <?php else: ?>
-                <a href="login.php" class="btn btn-outline-light fw-bold px-4 py-2 rounded-pill">
-                    <i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập để tham gia
-                </a>
-            <?php endif; ?>
-        </div>
+    <div class="campaigns-toolbar">
+        <?php if (isLoggedIn()): ?>
+            <a href="create-campaign.php" class="btn btn-light campaign-action-btn">
+                <i class="bi bi-plus-circle me-2"></i>Tạo chiến dịch mới
+            </a>
+        <?php else: ?>
+            <a href="login.php" class="btn btn-outline-secondary campaign-action-btn">
+                <i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập để tham gia
+            </a>
+        <?php endif; ?>
     </div>
 
     <div class="row g-3 mb-4">

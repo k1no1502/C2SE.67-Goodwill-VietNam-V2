@@ -115,12 +115,33 @@ include 'includes/header.php';
     .recruitment-modern {
         font-family: 'Manrope', sans-serif;
         color: var(--rc-text);
-        background:
-            radial-gradient(circle at 10% 15%, rgba(16, 195, 234, 0.12) 0, rgba(16, 195, 234, 0) 28%),
-            radial-gradient(circle at 90% 15%, rgba(124, 228, 255, 0.22) 0, rgba(124, 228, 255, 0) 24%),
-            #ffffff;
-        padding-top: 5.5rem;
+        background: #d0d8de;
+        padding-top: 0;
         padding-bottom: 4rem;
+        min-height: 100vh;
+    }
+
+    .recruitment-hero {
+        background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+        padding: 64px 0 48px;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .recruitment-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
+    }
+
+    .recruitment-hero-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.6rem;
     }
 
     .fade-card {
@@ -134,62 +155,57 @@ include 'includes/header.php';
         transform: translateY(0);
     }
 
-    .hero-panel,
     .soft-panel,
     .form-panel {
-        border: 1px solid rgba(16, 195, 234, 0.2);
+        border: 1px solid rgba(120, 208, 232, 0.48);
         border-radius: 24px;
         background: #ffffff;
-        box-shadow: 0 16px 40px rgba(3, 74, 90, 0.09);
-    }
-
-    .hero-panel {
-        padding: 2rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f4fcff 55%, #ecfbff 100%);
+        box-shadow: 0 12px 30px rgba(3, 74, 90, 0.08);
     }
 
     .hero-title {
-        font-size: clamp(1.8rem, 2.6vw, 2.7rem);
-        line-height: 1.15;
-        font-weight: 800;
-        margin-bottom: 0.8rem;
+        font-size: clamp(1.9rem, 4vw, 2.95rem);
+        line-height: 1.12;
+        font-weight: 900;
+        margin-bottom: 0.55rem;
+        color: #ffffff;
     }
 
     .hero-subtitle {
-        color: var(--rc-muted);
-        max-width: 620px;
-    }
-
-    .hero-badges .badge {
-        background: var(--rc-cyan-100);
-        color: var(--rc-cyan-700);
-        border: 1px solid rgba(0, 168, 207, 0.3);
-        border-radius: 999px;
-        font-weight: 700;
-        padding: 0.55rem 0.95rem;
+        color: rgba(255, 255, 255, 0.88);
+        max-width: 860px;
+        font-size: 1.03rem;
+        line-height: 1.5;
+        margin-bottom: 0;
     }
 
     .hero-icon-wrap {
-        width: 120px;
-        height: 120px;
+        width: 112px;
+        height: 112px;
         border-radius: 28px;
-        margin: 0 auto;
+        margin: 0;
         display: grid;
         place-items: center;
-        background: linear-gradient(145deg, var(--rc-cyan-500), var(--rc-cyan-700));
+        background: rgba(255, 255, 255, 0.15);
         color: #ffffff;
-        box-shadow: 0 20px 40px rgba(0, 168, 207, 0.35);
+        box-shadow: none;
+        border: 1px solid rgba(255, 255, 255, 0.26);
+        backdrop-filter: blur(6px);
     }
 
     .hero-icon-wrap i {
-        font-size: 3.2rem;
+        font-size: 3.25rem;
+    }
+
+    .recruitment-content {
+        padding-top: 2.3rem;
     }
 
     .mini-stat {
-        border: 1px solid rgba(16, 195, 234, 0.22);
+        border: 1px solid rgba(120, 208, 232, 0.45);
         background: #ffffff;
-        border-radius: 16px;
-        padding: 0.8rem 1rem;
+        border-radius: 24px;
+        padding: 1.2rem 1.1rem;
         text-align: center;
     }
 
@@ -197,12 +213,14 @@ include 'includes/header.php';
         display: block;
         color: var(--rc-cyan-700);
         font-weight: 800;
-        font-size: 1.1rem;
+        font-size: 2.2rem;
+        line-height: 1.05;
     }
 
     .mini-stat .label {
         color: var(--rc-muted);
-        font-size: 0.84rem;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
     }
 
     .soft-panel {
@@ -290,55 +308,70 @@ include 'includes/header.php';
 
     @media (max-width: 991.98px) {
         .recruitment-modern {
-            padding-top: 5rem;
+            padding-top: 0;
         }
 
-        .hero-panel,
         .form-panel {
             padding: 1.4rem;
+        }
+
+        .recruitment-hero {
+            padding: 42px 0 34px;
+        }
+
+        .recruitment-hero-content {
+            gap: 1rem;
+        }
+
+        .hero-icon-wrap {
+            width: 90px;
+            height: 90px;
+            border-radius: 22px;
+        }
+
+        .hero-icon-wrap i {
+            font-size: 2.45rem;
+        }
+
+        .mini-stat .value {
+            font-size: 1.6rem;
         }
     }
 </style>
 
 <section class="recruitment-modern">
-    <div class="container">
-        <div class="hero-panel fade-card">
-            <div class="row g-4 align-items-center">
-                <div class="col-lg-8">
-                    <h1 class="hero-title">Tuyển nhân viên Goodwill Vietnam</h1>
-                    <p class="hero-subtitle mb-3">
-                        Môi trường mở, học nhanh, làm việc vì cộng đồng. Chúng tôi chào đón những ứng viên muốn tạo tác động thật sự.
-                    </p>
-                    <div class="hero-badges d-flex flex-wrap gap-2 mb-3">
-                        <span class="badge">Full-time</span>
-                        <span class="badge">Part-time</span>
-                        <span class="badge">Thuc tap</span>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value"><?php echo (int)count($positions); ?>+</span>
-                                <span class="label">Vi tri mo</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value">48h</span>
-                                <span class="label">Phan hoi ho so</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value">On-site</span>
-                                <span class="label">Linh hoat lich</span>
-                            </div>
-                        </div>
-                    </div>
+    <div class="recruitment-hero">
+        <div class="container">
+            <div class="recruitment-hero-content">
+                <div class="hero-icon-wrap">
+                    <i class="bi bi-people-fill"></i>
                 </div>
-                <div class="col-lg-4 text-center">
-                    <div class="hero-icon-wrap">
-                        <i class="bi bi-people-fill"></i>
-                    </div>
+                <div>
+                    <h1 class="hero-title">Tuyển nhân viên Goodwill Vietnam</h1>
+                    <p class="hero-subtitle">Môi trường mở, học nhanh, làm việc vì cộng đồng. Chúng tôi chào đón những ứng viên muốn tạo tác động thật sự.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container recruitment-content">
+        <div class="row g-2 mb-4">
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value"><?php echo (int)count($positions); ?>+</span>
+                    <span class="label">Vi tri mo</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value">48h</span>
+                    <span class="label">Phan hoi ho so</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value">On-site</span>
+                    <span class="label">Linh hoat lich</span>
                 </div>
             </div>
         </div>

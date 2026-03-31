@@ -241,6 +241,89 @@
     </div>
     <script>
         (function () {
+            var html = document.documentElement;
+            var body = document.body;
+            var supportsTransitions = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var leaveDurationMs = 120;
+
+            if (!html.classList.contains('page-transition-enabled') || !body) {
+                return;
+            }
+
+            function enterPage() {
+                if (!supportsTransitions) {
+                    body.classList.add('page-entered');
+                    return;
+                }
+
+                requestAnimationFrame(function () {
+                    body.classList.add('page-entered');
+                });
+            }
+
+            function isInternalHttpLink(anchor) {
+                if (!anchor || !anchor.href) {
+                    return false;
+                }
+                if (anchor.target && anchor.target.toLowerCase() === '_blank') {
+                    return false;
+                }
+                if (anchor.hasAttribute('download')) {
+                    return false;
+                }
+
+                var href = anchor.getAttribute('href') || '';
+                if (!href || href.charAt(0) === '#') {
+                    return false;
+                }
+                if (/^(mailto:|tel:|javascript:)/i.test(href)) {
+                    return false;
+                }
+
+                var url = new URL(anchor.href, window.location.href);
+                if (url.origin !== window.location.origin) {
+                    return false;
+                }
+
+                // Keep same-page hash jumps instant.
+                if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            enterPage();
+
+            if (!supportsTransitions) {
+                return;
+            }
+
+            document.addEventListener('click', function (event) {
+                if (event.defaultPrevented || event.button !== 0) {
+                    return;
+                }
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                    return;
+                }
+
+                var anchor = event.target.closest('a');
+                if (!isInternalHttpLink(anchor)) {
+                    return;
+                }
+
+                event.preventDefault();
+                body.classList.remove('page-entered');
+                body.classList.add('page-leaving');
+
+                window.setTimeout(function () {
+                    window.location.href = anchor.href;
+                }, leaveDurationMs);
+            }, true);
+        })();
+    </script>
+    <script>
+        (function () {
             var toggle = document.getElementById('chatWidgetToggle');
             var panel = document.getElementById('chatWidgetPanel');
             var closeBtn = document.getElementById('chatWidgetClose');

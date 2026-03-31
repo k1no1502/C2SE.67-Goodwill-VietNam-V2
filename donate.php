@@ -851,24 +851,29 @@ include 'includes/header.php';
 ?>
 
 <!-- Main Content -->
-<section class="donate-page mt-5">
+<section class="donate-page">
     <div class="donate-hero">
         <div class="container-fluid px-4 px-lg-5">
-            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-                <div>
-                    <h1 class="mb-2"><i class="bi bi-heart-fill me-2"></i>Quyên góp cho Goodwill Vietnam</h1>
-                    <p class="mb-0">Bạn có thể quyên góp vật phẩm hoặc tiền mặt, theo dõi minh bạch toàn bộ quá trình xử lý.</p>
+            <div class="donate-hero-row">
+                <div class="donate-hero-icon-box">
+                    <i class="bi bi-heart-fill"></i>
                 </div>
-                <div class="hero-badges d-flex flex-wrap gap-2">
-                    <span class="hero-badge"><i class="bi bi-shield-check me-1"></i>Minh bạch</span>
-                    <span class="hero-badge"><i class="bi bi-lightning-charge me-1"></i>Xử lý nhanh</span>
-                    <span class="hero-badge"><i class="bi bi-geo-alt me-1"></i>Hỗ trợ toàn quốc</span>
+                <div class="donate-hero-copy">
+                    <div class="hero-heading mb-2">
+                        <h1 class="mb-0 donate-hero-title">Quyên góp cho Goodwill Vietnam</h1>
+                    </div>
+                    <p class="mb-0 donate-hero-sub">Bạn có thể quyên góp vật phẩm hoặc tiền mặt, theo dõi minh bạch toàn bộ quá trình xử lý.</p>
+                    <div class="donate-hero-badges mt-3">
+                        <span class="hero-badge"><i class="bi bi-shield-check me-2"></i>Minh bạch</span>
+                        <span class="hero-badge"><i class="bi bi-lightning-charge me-2"></i>Xử lý nhanh</span>
+                        <span class="hero-badge"><i class="bi bi-geo-alt me-2"></i>Hỗ trợ toàn quốc</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="container-fluid px-4 px-lg-5 pb-5">
+    <div class="container-fluid px-4 px-lg-5 pt-4 pb-5">
         <div class="row g-4">
             <div class="col-xl-3">
                 <aside class="donate-side-panel">
@@ -1184,39 +1189,90 @@ include 'includes/header.php';
 
 <style>
     .donate-page {
-        background:
-            radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.16), rgba(34, 211, 238, 0) 34%),
-            radial-gradient(circle at 92% 0%, rgba(125, 211, 252, 0.22), rgba(125, 211, 252, 0) 40%),
-            #f8fdff;
+        background: #f4fafd;
         min-height: calc(100vh - 110px);
     }
 
     .donate-hero {
-        padding: 2rem 0 1.5rem;
-        background: linear-gradient(180deg, #e6faff 0%, rgba(230, 250, 255, 0) 100%);
+        background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+        padding: 64px 0 52px;
+        position: relative;
+        overflow: hidden;
     }
 
-    .donate-hero h1 {
-        font-size: clamp(1.8rem, 2.6vw, 2.5rem);
-        font-weight: 800;
-        color: #0e7490;
+    .donate-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
     }
 
-    .donate-hero p {
-        color: #0f766e;
-        max-width: 760px;
+    .donate-hero-row {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.7rem;
+    }
+
+    .donate-hero-icon-box {
+        width: 90px;
+        height: 90px;
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        backdrop-filter: blur(6px);
+    }
+
+    .donate-hero-icon-box i {
+        font-size: 2.7rem;
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    .hero-heading {
+        max-width: 920px;
+    }
+
+    .donate-hero-copy {
+        max-width: 980px;
+        min-width: 0;
+    }
+
+    .donate-hero-title {
+        font-size: clamp(1.9rem, 4vw, 2.95rem);
+        font-weight: 900;
+        color: #ffffff;
+        line-height: 1.1;
+    }
+
+    .donate-hero-sub {
+        color: rgba(255, 255, 255, 0.88);
+        max-width: 900px;
+        font-size: 1.05rem;
+        line-height: 1.45;
+    }
+
+    .donate-hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
     }
 
     .hero-badge {
         display: inline-flex;
         align-items: center;
-        border: 1px solid rgba(14, 116, 144, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.45);
         border-radius: 999px;
-        padding: 0.38rem 0.78rem;
-        background: #ffffff;
-        color: #0e7490;
-        font-weight: 600;
-        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.9rem;
+        white-space: nowrap;
     }
 
     .donate-side-panel {
@@ -1397,6 +1453,43 @@ include 'includes/header.php';
         0% { transform: translateY(0); }
         50% { transform: translateY(-4px); }
         100% { transform: translateY(0); }
+    }
+
+    @media (max-width: 991.98px) {
+        .donate-hero {
+            padding: 40px 0 34px;
+        }
+
+        .donate-hero-row {
+            gap: 1rem;
+        }
+
+        .donate-hero-badges {
+            gap: 0.65rem;
+        }
+
+        .hero-badge {
+            padding: 0.52rem 0.95rem;
+            font-size: 0.88rem;
+        }
+
+        .donate-hero-icon-box {
+            width: 92px;
+            height: 92px;
+            border-radius: 22px;
+        }
+
+        .donate-hero-icon-box i {
+            font-size: 2.45rem;
+        }
+
+        .donate-hero-title {
+            font-size: clamp(1.85rem, 8vw, 2.95rem);
+        }
+
+        .donate-hero-sub {
+            font-size: 1rem;
+        }
     }
 
     /* Responsive adjustments */
