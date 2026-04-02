@@ -56,6 +56,11 @@ foreach ($cartItems as $item) {
     }
 }
 
+// Áp dụng giảm giá 10%
+$originalTotal = $totalAmount;
+$discountAmount = $totalAmount * 0.1;
+$totalAmount = $totalAmount * 0.9;
+
 include 'includes/header.php';
 ?>
 
@@ -289,7 +294,7 @@ include 'includes/header.php';
                         <?php foreach ($cartItems as $item): ?>
                             <?php
                             $images = json_decode($item['images'] ?? '[]', true);
-                            $firstImage = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                            $firstImage = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
                             
                             $priceDisplay = '';
                             $priceClass = '';
@@ -415,6 +420,15 @@ include 'includes/header.php';
                             <div class="d-flex justify-content-between mb-3">
                                 <span class="text-muted">Sản phẩm trả phí:</span>
                                 <span class="fw-bold" style="color: #fbbf24;"><?php echo $totalPaidLines; ?> sản phẩm</span>
+                            </div>
+                            <hr style="border-color: #f0f9ff;">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted">Tổng gốc:</span>
+                                <span class="text-muted"><?php echo $originalTotal > 0 ? number_format($originalTotal) . ' VNĐ' : 'Miễn phí'; ?></span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-success">Giảm giá 10%:</span>
+                                <span class="text-success">-<?php echo $discountAmount > 0 ? number_format($discountAmount) . ' VNĐ' : '0 VNĐ'; ?></span>
                             </div>
                             <hr style="border-color: #f0f9ff;">
                             <div class="d-flex justify-content-between">

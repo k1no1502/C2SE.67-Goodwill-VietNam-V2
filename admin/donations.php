@@ -5,6 +5,8 @@ require_once '../includes/functions.php';
 require_once '../includes/donation_tracking_helpers.php';
 
 requireStaffOrAdmin();
+enforceStaffPanelAccess(['warehouse']);
+$panelType = 'warehouse';
 ensureDonationTrackingTable();
 $trackingTemplates = getDonationTrackingTemplates();
 $trackingStatusOptions = [
@@ -581,7 +583,13 @@ $trackingMap = getDonationTrackingMap($donationIds);
 <body>
     <div class="container-fluid">
         <div class="row">
-            <?php include 'includes/sidebar.php'; ?>
+            <?php
+                if (isStaff() && !isAdmin()) {
+                    include 'includes/staff-sidebar.php';
+                } else {
+                    include 'includes/sidebar.php';
+                }
+            ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content admin-donations">
                 <div class="donations-topbar d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center gap-2">

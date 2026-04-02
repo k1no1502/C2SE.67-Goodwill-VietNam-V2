@@ -13,32 +13,59 @@ include 'includes/header.php';
 }
 .about-hero {
     background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
-    border-radius: 24px;
     color: #fff;
-    padding: 3rem 2.2rem;
+    padding: 4rem 3rem;
     position: relative;
     overflow: hidden;
 }
 .about-hero::after {
     content: '';
     position: absolute;
-    width: 300px;
-    height: 300px;
-    right: -90px;
-    top: -100px;
+    width: 360px;
+    height: 360px;
+    right: -120px;
+    top: -110px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%);
+    background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
 }
 .hero-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.4rem 0.85rem;
+    padding: 0.7rem 1.35rem;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.45);
     background: rgba(255,255,255,0.15);
-    font-size: 0.82rem;
+    font-size: 0.95rem;
     font-weight: 700;
+}
+.about-hero-copy {
+    max-width: 760px;
+}
+.about-hero-title {
+    font-size: clamp(2.7rem, 5.3vw, 5rem);
+    line-height: 1.08;
+    font-weight: 900;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+}
+.about-hero-subtitle {
+    font-size: clamp(1.18rem, 2vw, 1.9rem);
+    line-height: 1.5;
+    opacity: 0.92;
+    max-width: 780px;
+    margin-bottom: 0;
+}
+.about-hero-icon-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+}
+.about-hero-icon {
+    font-size: clamp(6.5rem, 10vw, 8.6rem);
+    opacity: 0.96;
+    color: #ffffff;
 }
 .glass-box {
     border: 1px solid #d4eaf1;
@@ -189,24 +216,52 @@ include 'includes/header.php';
     border-radius: 12px;
 }
 .btn-about-outline:hover { background: #0e7490; color: #fff; }
+@media (max-width: 991.98px) {
+    .about-hero {
+        padding: 2.2rem 1.5rem;
+    }
+    .hero-chip {
+        padding: 0.55rem 1rem;
+        font-size: 0.88rem;
+    }
+    .about-hero-title {
+        font-size: clamp(2rem, 8vw, 3.2rem);
+    }
+    .about-hero-subtitle {
+        font-size: 1.04rem;
+    }
+    .about-hero-icon-wrap {
+        justify-content: flex-start;
+    }
+    .about-hero-icon {
+        font-size: 5.2rem;
+    }
+}
 </style>
 
-<div class="about-page pt-5 mt-4 pb-5">
-    <div class="container py-4">
-        <section class="about-hero mb-4">
+<div class="about-page pb-5">
+    <section class="about-hero mb-4">
+        <div class="container py-4">
             <div class="row align-items-center g-4">
                 <div class="col-lg-8">
-                    <span class="hero-chip mb-3"><i class="bi bi-heart-fill"></i>Giới thiệu Goodwill Vietnam</span>
-                    <h1 class="display-5 fw-bold mb-3">Kết nối yêu thương, lan tỏa giá trị cộng đồng</h1>
-                    <p class="lead mb-0" style="opacity:0.92;">
-                        Chúng tôi xây dựng nền tảng thiện nguyện minh bạch, giúp người cho và người nhận gặp nhau đúng lúc.
-                    </p>
+                    <div class="about-hero-copy">
+                        <span class="hero-chip mb-4"><i class="bi bi-heart-fill"></i>Giới thiệu Goodwill Vietnam</span>
+                        <h1 class="about-hero-title">Kết nối yêu thương, lan tỏa giá trị cộng đồng</h1>
+                        <p class="about-hero-subtitle">
+                            Chúng tôi xây dựng nền tảng thiện nguyện minh bạch, giúp người cho và người nhận gặp nhau đúng lúc.
+                        </p>
+                    </div>
                 </div>
-                <div class="col-lg-4 text-center">
-                    <i class="bi bi-heart-fill" style="font-size: 6rem; opacity: 0.9;"></i>
+                <div class="col-lg-4">
+                    <div class="about-hero-icon-wrap">
+                        <i class="bi bi-heart-fill about-hero-icon"></i>
+                    </div>
                 </div>
             </div>
-        </section>
+        </div>
+    </section>
+
+    <div class="container py-4">
 
         <section class="glass-box p-3 p-md-4 mb-4">
             <div class="row g-3">

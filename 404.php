@@ -16,10 +16,10 @@
                 <h1 class="display-1 fw-bold text-success mt-4">404</h1>
                 <h3 class="mb-3">Không tìm thấy trang</h3>
                 <p class="text-muted mb-4">
-                    Rất tiếc, trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển.
+                    Rất tiếc, trang bạn đang tìm kiếm không tồn tại hoặc đã bị di chuyển hãy thữ lại sau.
                 </p>
                 <a href="index.php" class="btn btn-success btn-lg">
-                    <i class="bi bi-house-door me-2"></i>Về trang chủ
+                    <i class="bi bi-house-door me-2"></i>Về lại trang chủ
                 </a>
             </div>
         </div>

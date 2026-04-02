@@ -149,8 +149,9 @@ include 'includes/header.php';
                                                     <?php
                                                     $images = json_decode($donation['images'] ?? '[]', true);
                                                     if (!empty($images)):
+                                                        $firstImage = resolveDonationImageUrl((string)$images[0]);
                                                     ?>
-                                                        <img src="uploads/donations/<?php echo $images[0]; ?>" 
+                                                        <img src="<?php echo htmlspecialchars($firstImage); ?>" 
                                                              class="rounded me-2" 
                                                              style="width: 50px; height: 50px; object-fit: cover;"
                                                              onerror="this.src='uploads/donations/placeholder-default.svg'">
@@ -254,8 +255,9 @@ include 'includes/header.php';
                                                             <p><strong>Hình ảnh:</strong></p>
                                                             <div class="row">
                                                                 <?php foreach ($images as $img): ?>
+                                                                    <?php $imageUrl = resolveDonationImageUrl((string)$img); ?>
                                                                     <div class="col-md-3 mb-2">
-                                                                        <img src="uploads/donations/<?php echo $img; ?>" 
+                                                                        <img src="<?php echo htmlspecialchars($imageUrl); ?>" 
                                                                              class="img-fluid rounded" 
                                                                              onerror="this.src='uploads/donations/placeholder-default.svg'">
                                                                     </div>

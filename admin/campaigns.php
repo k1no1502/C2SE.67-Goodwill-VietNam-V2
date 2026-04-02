@@ -4,6 +4,8 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireStaffOrAdmin();
+enforceStaffPanelAccess(['campaigns']);
+$panelType = 'campaigns';
 
 // Handle campaign approval/rejection
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -145,6 +147,71 @@ $stats = [
     'active' => Database::fetch("SELECT COUNT(*) as count FROM campaigns WHERE status = 'active'")['count'],
     'completed' => Database::fetch("SELECT COUNT(*) as count FROM campaigns WHERE status = 'completed'")['count'],
 ];
+
+function extractYoutubeVideoId($input) {
+    $input = trim((string)$input);
+    if ($input === '') {
+        return '';
+    }
+
+    if (preg_match('/^[a-zA-Z0-9_-]{6,}$/', $input) && stripos($input, 'http') !== 0) {
+        return $input;
+    }
+
+    $parts = @parse_url($input);
+    if (!$parts || empty($parts['host'])) {
+        return '';
+    }
+
+    $host = strtolower($parts['host']);
+    $path = $parts['path'] ?? '';
+
+    if (strpos($host, 'youtu.be') !== false) {
+        $id = trim($path, '/');
+        return preg_match('/^[a-zA-Z0-9_-]{6,}$/', $id) ? $id : '';
+    }
+
+    if (strpos($host, 'youtube.com') !== false || strpos($host, 'youtube-nocookie.com') !== false) {
+        if (!empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+            if (!empty($query['v']) && preg_match('/^[a-zA-Z0-9_-]{6,}$/', $query['v'])) {
+                return $query['v'];
+            }
+        }
+
+        if (preg_match('#/(?:embed|shorts|live|reel|reels)/([a-zA-Z0-9_-]{6,})#i', $path, $matches)) {
+            return $matches[1];
+        }
+    }
+
+    return '';
+}
+
+function extractTikTokVideoId($url) {
+    $url = trim((string)$url);
+    if ($url === '') {
+        return '';
+    }
+
+    if (preg_match('#/video/(\d+)#i', $url, $matches)) {
+        return $matches[1];
+    }
+
+    if (preg_match('/[?&]item_id=(\d+)/i', $url, $matches)) {
+        return $matches[1];
+    }
+
+    return '';
+}
+
+function isTikTokLiveUrl($url) {
+    $url = trim((string)$url);
+    if ($url === '') {
+        return false;
+    }
+
+    return preg_match('#tiktok\.com/@[^/]+/live#i', $url) === 1 || strpos(strtolower($url), 'live.tiktok.com') !== false;
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -522,7 +589,13 @@ $stats = [
 <body>
     <div class="container-fluid">
         <div class="row">
-            <?php include 'includes/sidebar.php'; ?>
+            <?php
+                if (isStaff() && !isAdmin()) {
+                    include 'includes/staff-sidebar.php';
+                } else {
+                    include 'includes/sidebar.php';
+                }
+            ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="campaign-topbar">
@@ -830,12 +903,152 @@ $stats = [
                                                                 </video>
                                                             <?php elseif ($campaign['video_type'] === 'youtube' && $campaign['video_youtube']): ?>
                                                                 <p><strong>Video YouTube:</strong></p>
+                                                                <?php $youtubeEmbedId = extractYoutubeVideoId($campaign['video_youtube']); ?>
                                                                 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
                                                                     <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
-                                                                            src="https://www.youtube.com/embed/<?php echo htmlspecialchars($campaign['video_youtube']); ?>" 
+                                                                            src="https://www.youtube.com/embed/<?php echo htmlspecialchars($youtubeEmbedId); ?>" 
                                                                             frameborder="0" 
                                                                             allowfullscreen>
                                                                     </iframe>
+                                                                </div>
+                                                            <?php elseif ($campaign['video_type'] === 'facebook' && $campaign['video_facebook']): ?>
+                                                                <p><strong>Facebook Livestream:</strong></p>
+                                                                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                    <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                            src="https://www.facebook.com/plugins/video.php?href=<?php echo urlencode($campaign['video_facebook']); ?>&show_text=false" 
+                                                                            frameborder="0" 
+                                                                            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" 
+                                                                            allowfullscreen>
+                                                                    </iframe>
+                                                                </div>
+                                                            <?php elseif ($campaign['video_type'] === 'tiktok' && $campaign['video_tiktok']): ?>
+                                                                <p><strong>Video TikTok:</strong></p>
+                                                                <?php 
+                                                                $tiktokUrl = trim((string)$campaign['video_tiktok']);
+                                                                $tiktokVideoId = extractTikTokVideoId($tiktokUrl);
+                                                                $tiktokLiveUrl = isTikTokLiveUrl($tiktokUrl) ? $tiktokUrl : '';
+                                                                ?>
+                                                                <?php if ($tiktokVideoId): ?>
+                                                                    <div style="position: relative; padding-bottom: 100%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                        <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                src="https://www.tiktok.com/embed/v2/<?php echo $tiktokVideoId; ?>" 
+                                                                                frameborder="0" 
+                                                                                allow="autoplay; encrypted-media" 
+                                                                                allowfullscreen>
+                                                                        </iframe>
+                                                                    </div>
+                                                                <?php elseif ($tiktokLiveUrl): ?>
+                                                                    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                        <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                src="<?php echo htmlspecialchars($tiktokLiveUrl); ?>" 
+                                                                                frameborder="0" 
+                                                                                allow="autoplay; encrypted-media" 
+                                                                                allowfullscreen>
+                                                                        </iframe>
+                                                                    </div>
+                                                                <?php else: ?>
+                                                                    <div class="alert alert-warning" role="alert">
+                                                                        <i class="bi bi-exclamation-triangle me-2"></i>Không thể nhúng link TikTok này. <a href="<?php echo htmlspecialchars($tiktokUrl); ?>" target="_blank" rel="noopener">Mở TikTok</a>.
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            <?php elseif ($campaign['video_type'] === 'multi'): ?>
+                                                                <!-- Multi-video section -->
+                                                                <p><strong>Video chiến dịch:</strong></p>
+                                                                <ul class="nav nav-tabs mb-3" role="tablist">
+                                                                    <?php if ($campaign['video_file']): ?>
+                                                                        <li class="nav-item" role="presentation">
+                                                                            <button class="nav-link active" id="video-upload-tab" data-bs-toggle="tab" data-bs-target="#video-upload" type="button" role="tab">
+                                                                                <i class="bi bi-upload me-1"></i>Video tải lên
+                                                                            </button>
+                                                                        </li>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_youtube']): ?>
+                                                                        <li class="nav-item" role="presentation">
+                                                                            <button class="nav-link <?php echo !$campaign['video_file'] ? 'active' : ''; ?>" id="video-youtube-tab" data-bs-toggle="tab" data-bs-target="#video-youtube" type="button" role="tab">
+                                                                                <i class="bi bi-youtube me-1"></i>YouTube
+                                                                            </button>
+                                                                        </li>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_facebook']): ?>
+                                                                        <li class="nav-item" role="presentation">
+                                                                            <button class="nav-link <?php echo !$campaign['video_file'] && !$campaign['video_youtube'] ? 'active' : ''; ?>" id="video-facebook-tab" data-bs-toggle="tab" data-bs-target="#video-facebook" type="button" role="tab">
+                                                                                <i class="bi bi-facebook me-1"></i>Facebook Livestream
+                                                                            </button>
+                                                                        </li>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_tiktok']): ?>
+                                                                        <li class="nav-item" role="presentation">
+                                                                            <button class="nav-link <?php echo !$campaign['video_file'] && !$campaign['video_youtube'] && !$campaign['video_facebook'] ? 'active' : ''; ?>" id="video-tiktok-tab" data-bs-toggle="tab" data-bs-target="#video-tiktok" type="button" role="tab">
+                                                                                <i class="bi bi-play-circle me-1"></i>TikTok
+                                                                            </button>
+                                                                        </li>
+                                                                    <?php endif; ?>
+                                                                </ul>
+                                                                <div class="tab-content">
+                                                                    <?php if ($campaign['video_file']): ?>
+                                                                        <div class="tab-pane fade show active" id="video-upload">
+                                                                            <video width="100%" controls class="rounded" style="max-height: 400px;">
+                                                                                <source src="../uploads/campaigns/videos/<?php echo $campaign['video_file']; ?>" type="video/mp4">
+                                                                                Trình duyệt của bạn không hỗ trợ video.
+                                                                            </video>
+                                                                        </div>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_youtube']): ?>
+                                                                        <?php $youtubeEmbedId = extractYoutubeVideoId($campaign['video_youtube']); ?>
+                                                                        <div class="tab-pane fade <?php echo !$campaign['video_file'] ? 'show active' : ''; ?>" id="video-youtube">
+                                                                            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                                <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                        src="https://www.youtube.com/embed/<?php echo htmlspecialchars($youtubeEmbedId); ?>" 
+                                                                                        frameborder="0" 
+                                                                                        allowfullscreen>
+                                                                                </iframe>
+                                                                            </div>
+                                                                        </div>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_facebook']): ?>
+                                                                        <div class="tab-pane fade <?php echo !$campaign['video_file'] && !$campaign['video_youtube'] ? 'show active' : ''; ?>" id="video-facebook">
+                                                                            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                                <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                        src="https://www.facebook.com/plugins/video.php?href=<?php echo urlencode($campaign['video_facebook']); ?>&show_text=false" 
+                                                                                        frameborder="0" 
+                                                                                        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" 
+                                                                                        allowfullscreen>
+                                                                                </iframe>
+                                                                            </div>
+                                                                        </div>
+                                                                    <?php endif; ?>
+                                                                    <?php if ($campaign['video_tiktok']): ?>
+                                                                        <div class="tab-pane fade <?php echo !$campaign['video_file'] && !$campaign['video_youtube'] && !$campaign['video_facebook'] ? 'show active' : ''; ?>" id="video-tiktok">
+                                                                            <?php 
+                                                                            $tiktokUrl = trim((string)$campaign['video_tiktok']);
+                                                                            $tiktokVideoId = extractTikTokVideoId($tiktokUrl);
+                                                                            $tiktokLiveUrl = isTikTokLiveUrl($tiktokUrl) ? $tiktokUrl : '';
+                                                                            ?>
+                                                                            <?php if ($tiktokVideoId): ?>
+                                                                                <div style="position: relative; padding-bottom: 100%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                                    <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                            src="https://www.tiktok.com/embed/v2/<?php echo $tiktokVideoId; ?>" 
+                                                                                            frameborder="0" 
+                                                                                            allow="autoplay; encrypted-media" 
+                                                                                            allowfullscreen>
+                                                                                    </iframe>
+                                                                                </div>
+                                                                            <?php elseif ($tiktokLiveUrl): ?>
+                                                                                <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;">
+                                                                                    <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                                                                                            src="<?php echo htmlspecialchars($tiktokLiveUrl); ?>" 
+                                                                                            frameborder="0" 
+                                                                                            allow="autoplay; encrypted-media" 
+                                                                                            allowfullscreen>
+                                                                                    </iframe>
+                                                                                </div>
+                                                                            <?php else: ?>
+                                                                                <div class="alert alert-warning" role="alert">
+                                                                                    <i class="bi bi-exclamation-triangle me-2"></i>Không thể nhúng link TikTok này. <a href="<?php echo htmlspecialchars($tiktokUrl); ?>" target="_blank" rel="noopener">Mở TikTok</a>.
+                                                                                </div>
+                                                                            <?php endif; ?>
+                                                                        </div>
+                                                                    <?php endif; ?>
                                                                 </div>
                                                             <?php endif; ?>
                                                             

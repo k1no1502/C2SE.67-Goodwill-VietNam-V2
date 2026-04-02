@@ -168,7 +168,7 @@ include 'includes/header.php';
                     <?php foreach ($orderItems as $item): ?>
                         <?php
                         $images = json_decode($item['images'] ?? '[]', true);
-                        $firstImage = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                        $firstImage = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
                         ?>
                         <div class="border-bottom p-3">
                             <div class="row align-items-center">

@@ -29,6 +29,32 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
     <link rel="icon" type="image/jpeg" href="assets/images/favicons/GWVN.jpg">
     
     <style>
+        html.page-transition-enabled body {
+            opacity: 0;
+            transform: translateY(10px) scale(0.995);
+            transition: opacity 170ms cubic-bezier(0.22, 1, 0.36, 1), transform 170ms cubic-bezier(0.22, 1, 0.36, 1);
+            will-change: opacity, transform;
+        }
+        html.page-transition-enabled body.page-entered {
+            opacity: 1;
+            transform: none;
+        }
+        html.page-transition-enabled body.page-leaving {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.995);
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html.page-transition-enabled body {
+                transition: none;
+                transform: none;
+            }
+            html.page-transition-enabled body.page-entered,
+            html.page-transition-enabled body.page-leaving {
+                opacity: 1;
+                transform: none;
+            }
+        }
         .gw-navbar {
             backdrop-filter: blur(8px);
             background: rgba(255, 255, 255, 0.96) !important;
@@ -334,6 +360,11 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             }
         }
     </style>
+    <script>
+        (function() {
+            document.documentElement.classList.add('page-transition-enabled');
+        })();
+    </script>
     <script>
         // Apply saved theme as early as possible to avoid flicker
         (function() {

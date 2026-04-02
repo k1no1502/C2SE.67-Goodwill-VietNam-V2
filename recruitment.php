@@ -8,7 +8,7 @@ if (!isLoggedIn()) {
     exit();
 }
 
-$pageTitle = "Tuyen nhan vien";
+$pageTitle = "Tuyển nhân viên";
 $error = '';
 $success = '';
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -18,8 +18,23 @@ $userName = $_SESSION['name'] ?? '';
 $userEmail = $_SESSION['email'] ?? '';
 $userPhone = '';
 
-// Default values to avoid blank page if database tables are missing.
+$defaultPositionNames = [
+    'Quản lý kho hàng',
+    'Quản lý đơn hàng',
+    'Quản lý chiến dịch',
+    'Tư vấn chăm sóc khách hàng',
+    'Thu ngân'
+];
+
 $positions = [];
+foreach ($defaultPositionNames as $idx => $name) {
+    $positions[] = [
+        'position_id' => $idx + 1,
+        'position_name' => $name
+    ];
+}
+
+// Default values to avoid blank page if database tables are missing.
 $latestApplication = null;
 
 try {
@@ -31,8 +46,11 @@ try {
         $userPhone = $userInfo['phone'] ?? '';
     }
 
-    // Get recruitment positions from database
-    $positions = Database::fetchAll("SELECT position_id, position_name FROM recruitment_positions WHERE is_active = 1 ORDER BY position_name");
+    // Get recruitment positions from database (fallback to defaults if empty)
+    $dbPositions = Database::fetchAll("SELECT position_id, position_name FROM recruitment_positions WHERE is_active = 1 ORDER BY sort_order ASC, position_name ASC");
+    if (!empty($dbPositions)) {
+        $positions = $dbPositions;
+    }
 
     $latestApplication = Database::fetch(
         "SELECT application_id, status FROM recruitment_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -40,19 +58,18 @@ try {
     );
 } catch (Exception $e) {
     error_log('Recruitment page load error: ' . $e->getMessage());
-    $error = 'Chuc nang tuyen dung chua san sang. Vui long chay migration va thu lai.';
 }
 
 if (isset($_GET['submitted']) && $_GET['submitted'] === '1') {
-    $success = 'Da gui don dang ky. Chung toi se lien he som.';
+    $success = 'Đã gửi đơn đăng ký. Chúng tôi sẽ liên hệ sớm.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
     if (!validateCSRFToken($csrf)) {
-        $error = 'Yeu cau khong hop le. Vui long thu lai.';
+        $error = 'Yêu cầu không hợp lệ. Vui lòng thử lại.';
     } elseif ($latestApplication && $latestApplication['status'] === 'pending') {
-        $error = 'Don dang ky cua ban dang duoc xu ly.';
+        $error = 'Đơn đăng ký của bạn đang được xử lý.';
     } else {
         $fullName = sanitize($_POST['full_name'] ?? '');
         $email = sanitize($_POST['email'] ?? '');
@@ -63,16 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cvFilename = null;
 
         if ($fullName === '' || $email === '' || $phone === '' || $position === '') {
-            $error = 'Vui long nhap day du thong tin bat buoc.';
+            $error = 'Vui lòng nhập đầy đủ thông tin bắt buộc.';
         } elseif (!validateEmail($email)) {
-            $error = 'Email khong hop le.';
+            $error = 'Email không hợp lệ.';
         } else {
             if (isset($_FILES['cv_file']) && $_FILES['cv_file']['error'] !== UPLOAD_ERR_NO_FILE) {
                 $upload = uploadFile($_FILES['cv_file'], 'uploads/cv/', ['pdf', 'doc', 'docx']);
                 if ($upload['success']) {
                     $cvFilename = $upload['filename'];
                 } else {
-                    $error = 'CV khong hop le. Vui long chon file PDF, DOC hoac DOCX (toi da 5MB).';
+                    $error = 'CV không hợp lệ. Vui lòng chọn file PDF, DOC hoặc DOCX (tối đa 5MB).';
                 }
             }
         }
@@ -90,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             } catch (Exception $e) {
                 error_log('Recruitment apply error: ' . $e->getMessage());
-                $error = 'Co loi xay ra. Vui long thu lai sau khi migration hoan tat.';
+                $error = 'Có lỗi xảy ra. Vui lòng thử lại sau khi migration hoàn tất.';
             }
         }
     }
@@ -115,12 +132,33 @@ include 'includes/header.php';
     .recruitment-modern {
         font-family: 'Manrope', sans-serif;
         color: var(--rc-text);
-        background:
-            radial-gradient(circle at 10% 15%, rgba(16, 195, 234, 0.12) 0, rgba(16, 195, 234, 0) 28%),
-            radial-gradient(circle at 90% 15%, rgba(124, 228, 255, 0.22) 0, rgba(124, 228, 255, 0) 24%),
-            #ffffff;
-        padding-top: 5.5rem;
+        background: #d0d8de;
+        padding-top: 0;
         padding-bottom: 4rem;
+        min-height: 100vh;
+    }
+
+    .recruitment-hero {
+        background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+        padding: 64px 0 48px;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .recruitment-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
+    }
+
+    .recruitment-hero-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1.6rem;
     }
 
     .fade-card {
@@ -134,62 +172,57 @@ include 'includes/header.php';
         transform: translateY(0);
     }
 
-    .hero-panel,
     .soft-panel,
     .form-panel {
-        border: 1px solid rgba(16, 195, 234, 0.2);
+        border: 1px solid rgba(120, 208, 232, 0.48);
         border-radius: 24px;
         background: #ffffff;
-        box-shadow: 0 16px 40px rgba(3, 74, 90, 0.09);
-    }
-
-    .hero-panel {
-        padding: 2rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f4fcff 55%, #ecfbff 100%);
+        box-shadow: 0 12px 30px rgba(3, 74, 90, 0.08);
     }
 
     .hero-title {
-        font-size: clamp(1.8rem, 2.6vw, 2.7rem);
-        line-height: 1.15;
-        font-weight: 800;
-        margin-bottom: 0.8rem;
+        font-size: clamp(1.9rem, 4vw, 2.95rem);
+        line-height: 1.12;
+        font-weight: 900;
+        margin-bottom: 0.55rem;
+        color: #ffffff;
     }
 
     .hero-subtitle {
-        color: var(--rc-muted);
-        max-width: 620px;
-    }
-
-    .hero-badges .badge {
-        background: var(--rc-cyan-100);
-        color: var(--rc-cyan-700);
-        border: 1px solid rgba(0, 168, 207, 0.3);
-        border-radius: 999px;
-        font-weight: 700;
-        padding: 0.55rem 0.95rem;
+        color: rgba(255, 255, 255, 0.88);
+        max-width: 860px;
+        font-size: 1.03rem;
+        line-height: 1.5;
+        margin-bottom: 0;
     }
 
     .hero-icon-wrap {
-        width: 120px;
-        height: 120px;
+        width: 112px;
+        height: 112px;
         border-radius: 28px;
-        margin: 0 auto;
+        margin: 0;
         display: grid;
         place-items: center;
-        background: linear-gradient(145deg, var(--rc-cyan-500), var(--rc-cyan-700));
+        background: rgba(255, 255, 255, 0.15);
         color: #ffffff;
-        box-shadow: 0 20px 40px rgba(0, 168, 207, 0.35);
+        box-shadow: none;
+        border: 1px solid rgba(255, 255, 255, 0.26);
+        backdrop-filter: blur(6px);
     }
 
     .hero-icon-wrap i {
-        font-size: 3.2rem;
+        font-size: 3.25rem;
+    }
+
+    .recruitment-content {
+        padding-top: 2.3rem;
     }
 
     .mini-stat {
-        border: 1px solid rgba(16, 195, 234, 0.22);
+        border: 1px solid rgba(120, 208, 232, 0.45);
         background: #ffffff;
-        border-radius: 16px;
-        padding: 0.8rem 1rem;
+        border-radius: 24px;
+        padding: 1.2rem 1.1rem;
         text-align: center;
     }
 
@@ -197,12 +230,14 @@ include 'includes/header.php';
         display: block;
         color: var(--rc-cyan-700);
         font-weight: 800;
-        font-size: 1.1rem;
+        font-size: 2.2rem;
+        line-height: 1.05;
     }
 
     .mini-stat .label {
         color: var(--rc-muted);
-        font-size: 0.84rem;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
     }
 
     .soft-panel {
@@ -290,55 +325,70 @@ include 'includes/header.php';
 
     @media (max-width: 991.98px) {
         .recruitment-modern {
-            padding-top: 5rem;
+            padding-top: 0;
         }
 
-        .hero-panel,
         .form-panel {
             padding: 1.4rem;
+        }
+
+        .recruitment-hero {
+            padding: 42px 0 34px;
+        }
+
+        .recruitment-hero-content {
+            gap: 1rem;
+        }
+
+        .hero-icon-wrap {
+            width: 90px;
+            height: 90px;
+            border-radius: 22px;
+        }
+
+        .hero-icon-wrap i {
+            font-size: 2.45rem;
+        }
+
+        .mini-stat .value {
+            font-size: 1.6rem;
         }
     }
 </style>
 
 <section class="recruitment-modern">
-    <div class="container">
-        <div class="hero-panel fade-card">
-            <div class="row g-4 align-items-center">
-                <div class="col-lg-8">
-                    <h1 class="hero-title">Tuyển nhân viên Goodwill Vietnam</h1>
-                    <p class="hero-subtitle mb-3">
-                        Môi trường mở, học nhanh, làm việc vì cộng đồng. Chúng tôi chào đón những ứng viên muốn tạo tác động thật sự.
-                    </p>
-                    <div class="hero-badges d-flex flex-wrap gap-2 mb-3">
-                        <span class="badge">Full-time</span>
-                        <span class="badge">Part-time</span>
-                        <span class="badge">Thuc tap</span>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value"><?php echo (int)count($positions); ?>+</span>
-                                <span class="label">Vi tri mo</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value">48h</span>
-                                <span class="label">Phan hoi ho so</span>
-                            </div>
-                        </div>
-                        <div class="col-6 col-sm-4">
-                            <div class="mini-stat">
-                                <span class="value">On-site</span>
-                                <span class="label">Linh hoat lich</span>
-                            </div>
-                        </div>
-                    </div>
+    <div class="recruitment-hero">
+        <div class="container">
+            <div class="recruitment-hero-content">
+                <div class="hero-icon-wrap">
+                    <i class="bi bi-people-fill"></i>
                 </div>
-                <div class="col-lg-4 text-center">
-                    <div class="hero-icon-wrap">
-                        <i class="bi bi-people-fill"></i>
-                    </div>
+                <div>
+                    <h1 class="hero-title">Tuyển nhân viên Goodwill Vietnam</h1>
+                    <p class="hero-subtitle">Môi trường mở, học nhanh, làm việc vì cộng đồng. Chúng tôi chào đón những ứng viên muốn tạo tác động thật sự.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container recruitment-content">
+        <div class="row g-2 mb-4">
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value"><?php echo (int)count($positions); ?>+</span>
+                    <span class="label">Vị trí mở</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value">48h</span>
+                    <span class="label">Phản hồi hồ sơ</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="mini-stat">
+                    <span class="value">On-site</span>
+                    <span class="label">Linh hoạt lịch</span>
                 </div>
             </div>
         </div>
@@ -346,7 +396,7 @@ include 'includes/header.php';
         <div class="row g-4 mt-1">
             <div class="col-md-6 fade-card">
                 <div class="soft-panel">
-                    <h4>Vi tri dang tuyen</h4>
+                    <h4>Vị trí đang tuyển</h4>
                     <?php if (!empty($positions)): ?>
                         <?php foreach ($positions as $pos): ?>
                             <div class="position-item">
@@ -357,14 +407,14 @@ include 'includes/header.php';
                     <?php else: ?>
                         <div class="position-item mb-0">
                             <i class="bi bi-info-circle"></i>
-                            <span>Chua co vi tri nao duoc mo. Vui long quay lai sau.</span>
+                            <span>Chưa có vị trí nào được mở. Vui lòng quay lại sau.</span>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
             <div class="col-md-6 fade-card">
                 <div class="soft-panel">
-                    <h4>Yeu cau chung</h4>
+                    <h4>Yêu cầu chung</h4>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Có tinh thần phục vụ cộng đồng</div>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Chủ động, trách nhiệm cao</div>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Kỹ năng giao tiếp tốt</div>
@@ -380,7 +430,7 @@ include 'includes/header.php';
                     <p class="form-subtitle mb-0">Điền thông tin để ứng tuyển. Đội ngũ tuyển dụng sẽ liên hệ sớm.</p>
                 </div>
                 <div class="col-lg-5 text-lg-end">
-                    <span class="processing-badge"><i class="bi bi-lightning-charge-fill"></i>Xu ly trong 2-3 ngay</span>
+                    <span class="processing-badge"><i class="bi bi-lightning-charge-fill"></i>Xử lý trong 2-3 ngày</span>
                 </div>
             </div>
 
@@ -424,11 +474,11 @@ include 'includes/header.php';
                     <div class="col-md-6 mb-3">
                         <label for="position" class="form-label">Vị trí ứng tuyển *</label>
                         <select class="form-select" id="position" name="position" required>
-                            <option value="" selected disabled>Chon vi tri</option>
+                            <option value="" selected disabled>Chọn vị trí</option>
                             <?php foreach ($positions as $pos): ?>
                             <option value="<?php echo htmlspecialchars($pos['position_name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($pos['position_name'], ENT_QUOTES, 'UTF-8'); ?></option>
                             <?php endforeach; ?>
-                            <option value="Khac">Khác</option>
+                            <option value="Khác">Khác</option>
                         </select>
                         <div class="invalid-feedback">Vui lòng chọn vị trí ứng tuyển.</div>
                     </div>
@@ -436,24 +486,24 @@ include 'includes/header.php';
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="availability" class="form-label">Thoi gian lam viec</label>
+                        <label for="availability" class="form-label">Thời gian làm việc</label>
                         <select class="form-select" id="availability" name="availability">
                             <option value="Full-time">Full-time</option>
                             <option value="Part-time">Part-time</option>
-                            <option value="Thuc tap">Thuc tap</option>
+                            <option value="Thực tập">Thực tập</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="mb-3">
                     <label for="message" class="form-label">Giới thiệu</label>
-                    <textarea class="form-control" id="message" name="message" rows="4" placeholder="Gioi thieu ve ban va ly do ung tuyen"></textarea>
+                    <textarea class="form-control" id="message" name="message" rows="4" placeholder="Giới thiệu về bạn và lý do ứng tuyển"></textarea>
                 </div>
 
                 <div class="mb-3">
                     <label for="cv_file" class="form-label">CV (PDF, DOC, DOCX)</label>
                     <input type="file" class="form-control" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
-                    <div class="form-text">Toi da 5MB. Neu da nop don truoc do, khong can tai lai.</div>
+                    <div class="form-text">Tối đa 5MB. Nếu đã nộp đơn trước đó, không cần tải lại.</div>
                 </div>
 
                 <div class="d-grid d-md-flex gap-3">
@@ -464,7 +514,7 @@ include 'includes/header.php';
             </form>
 
             <p class="text-muted small mt-3 mb-0">
-                * Don se duoc gui den admin de phe duyet.
+                * Đơn sẽ được gửi đến admin để phê duyệt.
             </p>
         </div>
     </div>
