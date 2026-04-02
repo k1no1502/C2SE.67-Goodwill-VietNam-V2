@@ -1,4 +1,4 @@
--- Database.sql
+﻿-- Database.sql
 -- Consolidated database schema, migrations, and seed data for Goodwill Vietnam
 -- This file combines: Final_DB.sql, all migrations, and sample data imports
 -- Generated: 2026-03-06
@@ -42,6 +42,7 @@ DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS system_settings;
 DROP TABLE IF EXISTS backups;
 DROP TABLE IF EXISTS social_accounts;
+DROP TABLE IF EXISTS recruitment_positions;
 DROP TABLE IF EXISTS recruitment_applications;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS roles;
@@ -239,9 +240,11 @@ CREATE TABLE campaigns (
     name VARCHAR(200) NOT NULL,
     description TEXT,
     image VARCHAR(255),
-    video_type ENUM('none', 'upload', 'youtube') DEFAULT 'none',
+    video_type ENUM('none', 'upload', 'youtube', 'facebook', 'tiktok', 'multi') DEFAULT 'none',
     video_file VARCHAR(255),
     video_youtube VARCHAR(255),
+    video_facebook VARCHAR(255),
+    video_tiktok VARCHAR(255),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     target_amount DECIMAL(12,2),
@@ -482,6 +485,19 @@ CREATE TABLE staff (
     INDEX idx_staff_position (position)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Recruitment Positions
+CREATE TABLE recruitment_positions (
+    position_id INT PRIMARY KEY AUTO_INCREMENT,
+    position_name VARCHAR(100) NOT NULL,
+    description VARCHAR(255) DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_recruitment_position_name (position_name),
+    INDEX idx_recruitment_positions_active (is_active, sort_order, position_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Recruitment Applications
 CREATE TABLE recruitment_applications (
     application_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -667,10 +683,10 @@ CREATE INDEX idx_cart_user ON cart(user_id);
 
 -- Seeds: Roles
 INSERT INTO roles (role_id, role_name, description, permissions) VALUES
-    (1, 'quản trị viên', 'Quản trị viên hệ thống', '{"all": true}'),
-    (2, 'người dùng', 'Người dùng đã đăng ký', '{"donate": true, "browse": true, "order": true}'),
-    (3, 'khách', 'Khách', '{"browse": true}'),
-    (4, 'nhân viên', 'Nhân viên', '{"staff": true}')
+    (1, 'quáº£n trá»‹ viÃªn', 'Quáº£n trá»‹ viÃªn há»‡ thá»‘ng', '{"all": true}'),
+    (2, 'ngÆ°á»i dÃ¹ng', 'NgÆ°á»i dÃ¹ng Ä‘Ã£ Ä‘Äƒng kÃ½', '{"donate": true, "browse": true, "order": true}'),
+    (3, 'khÃ¡ch', 'KhÃ¡ch', '{"browse": true}'),
+    (4, 'nhÃ¢n viÃªn', 'NhÃ¢n viÃªn', '{"staff": true}')
 ON DUPLICATE KEY UPDATE
     role_name = VALUES(role_name),
     description = VALUES(description),
@@ -678,14 +694,14 @@ ON DUPLICATE KEY UPDATE
 
 -- Seeds: Categories
 INSERT INTO categories (category_id, name, description, icon, sort_order) VALUES
-    (1, 'Quần áo', 'Các mặt hàng quần áo', 'bi-tshirt', 1),
-    (2, 'Điện tử', 'Điện thoại và máy tính', 'bi-laptop', 2),
-    (3, 'Sách', 'Sách và tài liệu', 'bi-book', 3),
-    (4, 'Gia dụng', 'Các mặt hàng gia dụng', 'bi-house', 4),
-    (5, 'Đồ chơi', 'Đồ chơi cho trẻ em', 'bi-toy', 5),
-    (6, 'Thực phẩm', 'Thực phẩm và lương thực', 'bi-basket', 6),
-    (7, 'Y tế', 'Vật tư y tế', 'bi-heart-pulse', 7),
-    (8, 'Khác', 'Các mặt hàng khác', 'bi-box', 8)
+    (1, 'Quáº§n Ã¡o', 'CÃ¡c máº·t hÃ ng quáº§n Ã¡o', 'bi-tshirt', 1),
+    (2, 'Äiá»‡n tá»­', 'Äiá»‡n thoáº¡i vÃ  mÃ¡y tÃ­nh', 'bi-laptop', 2),
+    (3, 'SÃ¡ch', 'SÃ¡ch vÃ  tÃ i liá»‡u', 'bi-book', 3),
+    (4, 'Gia dá»¥ng', 'CÃ¡c máº·t hÃ ng gia dá»¥ng', 'bi-house', 4),
+    (5, 'Äá»“ chÆ¡i', 'Äá»“ chÆ¡i cho tráº» em', 'bi-toy', 5),
+    (6, 'Thá»±c pháº©m', 'Thá»±c pháº©m vÃ  lÆ°Æ¡ng thá»±c', 'bi-basket', 6),
+    (7, 'Y táº¿', 'Váº­t tÆ° y táº¿', 'bi-heart-pulse', 7),
+    (8, 'KhÃ¡c', 'CÃ¡c máº·t hÃ ng khÃ¡c', 'bi-box', 8)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     description = VALUES(description),
@@ -748,99 +764,24 @@ ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value),
     description = VALUES(description),
     type = VALUES(type);
 
--- ============================================================================
--- IMPORT HOUSEHOLD DATA
--- ============================================================================
-
-START TRANSACTION;
-SET @user_id = 1;
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Máy giặt Panasonic Inverter 9kg', 'Máy giặt cửa trước inverter, tiết kiệm điện cho gia đình.', 4, 2, 'cái', 'like_new', 8500000, JSON_ARRAY('picture_Database/may-giat-panasonic.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Máy giặt Panasonic Inverter 9kg', 'Máy giặt cửa trước inverter, tiết kiệm điện cho gia đình.', 4, 2, 'cái', 'like_new', 'cheap', 7900000, 8500000, JSON_ARRAY('picture_Database/may-giat-panasonic.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Tủ lạnh Samsung 2 cửa', 'Tủ lạnh dung tích trung bình, phù hợp căn hộ và gia đình nhỏ.', 4, 1, 'cái', 'good', 7200000, JSON_ARRAY('picture_Database/tu-lanh-samsung.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Tủ lạnh Samsung 2 cửa', 'Tủ lạnh dung tích trung bình, phù hợp căn hộ và gia đình nhỏ.', 4, 1, 'cái', 'good', 'cheap', 6800000, 7200000, JSON_ARRAY('picture_Database/tu-lanh-samsung.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Nồi cơm điện Sharp 1.8L', 'Nồi cơm điện dung tích 1.8L, dễ sử dụng và dễ vệ sinh.', 4, 3, 'cái', 'new', 950000, JSON_ARRAY('picture_Database/noi-com-sharp.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Nồi cơm điện Sharp 1.8L', 'Nồi cơm điện dung tích 1.8L, dễ sử dụng và dễ vệ sinh.', 4, 3, 'cái', 'new', 'cheap', 890000, 950000, JSON_ARRAY('picture_Database/noi-com-sharp.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Lò vi sóng Electrolux', 'Lò vi sóng hâm nóng nhanh, có chế độ rã đông và nướng cơ bản.', 4, 2, 'cái', 'good', 2100000, JSON_ARRAY('picture_Database/lo-vi-song-electrolux.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Lò vi sóng Electrolux', 'Lò vi sóng hâm nóng nhanh, có chế độ rã đông và nướng cơ bản.', 4, 2, 'cái', 'good', 'cheap', 1950000, 2100000, JSON_ARRAY('picture_Database/lo-vi-song-electrolux.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Máy hút bụi Philips', 'Máy hút bụi công suất cao, phù hợp vệ sinh nhà cửa hằng ngày.', 4, 2, 'cái', 'like_new', 2400000, JSON_ARRAY('picture_Database/may-hut-bui-philips.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Máy hút bụi Philips', 'Máy hút bụi công suất cao, phù hợp vệ sinh nhà cửa hằng ngày.', 4, 2, 'cái', 'like_new', 'cheap', 2250000, 2400000, JSON_ARRAY('picture_Database/may-hut-bui-philips.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Máy lọc không khí Xiaomi', 'Máy lọc không khí cho phòng ngủ và phòng khách, lọc bụi mịn tốt.', 4, 2, 'cái', 'new', 3200000, JSON_ARRAY('picture_Database/may-loc-khong-khi-xiaomi.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Máy lọc không khí Xiaomi', 'Máy lọc không khí cho phòng ngủ và phòng khách, lọc bụi mịn tốt.', 4, 2, 'cái', 'new', 'cheap', 2990000, 3200000, JSON_ARRAY('picture_Database/may-loc-khong-khi-xiaomi.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Máy lạnh Daikin 1HP', 'Máy lạnh treo tường 1HP, làm mát nhanh và vận hành ổn định.', 4, 1, 'cái', 'good', 9800000, JSON_ARRAY('picture_Database/may-lanh-daikin.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Máy lạnh Daikin 1HP', 'Máy lạnh treo tường 1HP, làm mát nhanh và vận hành ổn định.', 4, 1, 'cái', 'good', 'cheap', 9300000, 9800000, JSON_ARRAY('picture_Database/may-lanh-daikin.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Bếp từ đôi Sunhouse', 'Bếp từ đôi mặt kính, nấu nhanh và có khóa an toàn.', 4, 2, 'bộ', 'new', 4600000, JSON_ARRAY('picture_Database/bep-tu-sunhouse.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Bếp từ đôi Sunhouse', 'Bếp từ đôi mặt kính, nấu nhanh và có khóa an toàn.', 4, 2, 'bộ', 'new', 'cheap', 4290000, 4600000, JSON_ARRAY('picture_Database/bep-tu-sunhouse.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Nồi chiên không dầu LocknLock', 'Nồi chiên không dầu giúp giảm dầu mỡ, phù hợp bữa ăn gia đình.', 4, 2, 'cái', 'like_new', 1850000, JSON_ARRAY('picture_Database/noi-chien-locknlock.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Nồi chiên không dầu LocknLock', 'Nồi chiên không dầu giúp giảm dầu mỡ, phù hợp bữa ăn gia đình.', 4, 2, 'cái', 'like_new', 'cheap', 1690000, 1850000, JSON_ARRAY('picture_Database/noi-chien-locknlock.jpg'), 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'Robot hút bụi Ecovacs', 'Robot hút bụi tự động, tự quay về đế sạc sau khi làm sạch.', 4, 2, 'cái', 'new', 6900000, JSON_ARRAY('picture_Database/robot-hut-bui-ecovacs.jpg'), 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'Robot hút bụi Ecovacs', 'Robot hút bụi tự động, tự quay về đế sạc sau khi làm sạch.', 4, 2, 'cái', 'new', 'cheap', 6500000, 6900000, JSON_ARRAY('picture_Database/robot-hut-bui-ecovacs.jpg'), 'available');
-COMMIT;
+-- Seeds: Recruitment Positions
+INSERT INTO recruitment_positions (position_id, position_name, description, is_active, sort_order) VALUES
+    (1, 'Quản lý kho hàng', 'Quản lý nhập/xuất và theo dõi tồn kho hàng hóa', TRUE, 1),
+    (2, 'Quản lý đơn hàng', 'Tiếp nhận, xử lý và theo dõi trạng thái đơn hàng', TRUE, 2),
+    (3, 'Quản lý chiến dịch', 'Lập kế hoạch, triển khai và giám sát các chiến dịch', TRUE, 3),
+    (4, 'Tư vấn chăm sóc khách hàng', 'Tư vấn, hỗ trợ và chăm sóc khách hàng đa kênh', TRUE, 4),
+    (5, 'Thu ngân', 'Thanh toán trực tiếp tại điểm bán và hỗ trợ giao dịch tại quầy', TRUE, 5)
+ON DUPLICATE KEY UPDATE
+    position_name = VALUES(position_name),
+    description = VALUES(description),
+    is_active = VALUES(is_active),
+    sort_order = VALUES(sort_order);
 
 -- ============================================================================
--- IMPORT PS GAMES DATA
+-- IMPORT PRODUCT CATALOG DATA (100 items) [REMOVED]
 -- ============================================================================
+-- Seed product data removed. You can add products manually after import.
 
-START TRANSACTION;
-SET @user_id = 1;
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Uncharted 2 - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 140000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Uncharted 2 - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 'cheap', 120000, 140000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - The Last of Us', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 200000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - The Last of Us', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 'cheap', 180000, 200000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - God of War III', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 190000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - God of War III', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 150000, 190000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Metal Gear Solid 4', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 160000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Metal Gear Solid 4', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 120000, 160000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Gran Turismo 5', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 140000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Gran Turismo 5', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 120000, 140000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - LittleBigPlanet - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 170000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - LittleBigPlanet - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 150000, 170000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Red Dead Redemption', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 160000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Red Dead Redemption', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 'cheap', 120000, 160000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Demon''s Souls', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 220000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Demon''s Souls', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 200000, 220000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Killzone 2', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 200000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Killzone 2', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 180000, 200000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Journey', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 230000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Journey', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 200000, 230000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Infamous - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 170000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Infamous - Special Edition', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 150000, 170000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Resistance 3', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 140000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Resistance 3', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 120000, 140000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Ratchet and Clank Future', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 150000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Ratchet and Clank Future', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 120000, 150000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Heavy Rain', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 200000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Heavy Rain', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'like_new', 'cheap', 180000, 200000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS3 Game - Twisted Metal', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 240000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS3 Game - Twisted Metal', 'PS3 disc in good condition. Includes original case.', 2, 1000, 'disc', 'fair', 'cheap', 200000, 240000, '[]', 'available');
-INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, condition_status, estimated_value, images, status) VALUES (@user_id, 'PS4 Game - God of War - Special Edition', 'PS4 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 220000, '[]', 'approved');
-SET @donation_id = LAST_INSERT_ID();
-INSERT INTO inventory (donation_id, name, description, category_id, quantity, unit, condition_status, price_type, sale_price, estimated_value, images, status) VALUES (@donation_id, 'PS4 Game - God of War - Special Edition', 'PS4 disc in good condition. Includes original case.', 2, 1000, 'disc', 'good', 'cheap', 200000, 220000, '[]', 'available');
-COMMIT;
 
 -- ============================================================================
 -- VIEWS
@@ -1048,25 +989,15 @@ BEGIN
         VALUES (NEW.order_id, OLD.status, NEW.status, CONCAT('Status changed from ', OLD.status, ' to ', NEW.status));
     END IF;
 END$$
-
+  
 DELIMITER ;
 
 -- ============================================================================
 -- SAMPLE RATINGS DATA
 -- ============================================================================
 
--- Insert sample ratings for testing
-INSERT INTO ratings (item_id, user_id, rating_stars, review_text, created_at) VALUES
-(1, 1, 5, 'Sản phẩm rất tốt, chất lượng cao, giao hàng nhanh chóng và đóng gói cẩn thận. Rất hài lòng!', NOW()),
-(1, 2, 4, 'Sản phẩm đẹp và bền. Giá cả hợp lý. Giao hàng chậm một chút nhưng quy trình không sai.', NOW()),
-(2, 1, 4, 'Sản phẩm hoạt động tốt, đúng như hình ảnh. Chất lượng tốt cho giá tiền.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(2, 2, 5, 'Rất tuyệt vời! Chất lượng vượt quá mong đợi. Sẽ mua lại lần nữa.', DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(3, 1, 3, 'Sản phẩm bình thường. Có một số vết xước nhỏ nhưng không ảnh hưởng đến chức năng.', DATE_SUB(NOW(), INTERVAL 5 DAY))
-ON DUPLICATE KEY UPDATE 
-  rating_stars = VALUES(rating_stars),
-  review_text = VALUES(review_text);
-
--- Update inventory average ratings
+-- Sample ratings removed to avoid FK errors when no seeded products are present.
+-- Update inventory average ratings from existing ratings data (if any).
 UPDATE inventory i
 SET average_rating = (
     SELECT COALESCE(AVG(r.rating_stars), 0)
@@ -1077,11 +1008,30 @@ rating_count = (
     SELECT COUNT(*)
     FROM ratings r
     WHERE r.item_id = i.item_id
-)
-WHERE i.item_id IN (1, 2, 3);
+);
+
+-- Ensure every product has at least one image path.
+UPDATE donations
+SET images = JSON_ARRAY('placeholder-default.svg')
+WHERE images IS NULL
+    OR JSON_VALID(images) = 0
+    OR JSON_LENGTH(images) = 0;
+
+UPDATE inventory
+SET images = JSON_ARRAY('placeholder-default.svg')
+WHERE images IS NULL
+    OR JSON_VALID(images) = 0
+    OR JSON_LENGTH(images) = 0;
 
 -- ============================================================================
 -- FINAL COMMIT
 -- ============================================================================
 
 COMMIT;
+
+
+
+
+
+
+

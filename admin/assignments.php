@@ -5,6 +5,8 @@ require_once '../includes/functions.php';
 require_once '../includes/volunteer_tracking_helper.php';
 
 requireStaffOrAdmin();
+enforceStaffPanelAccess(['campaigns']);
+$panelType = 'campaigns';
 
 $campaigns = Database::fetchAll("
     SELECT c.*,
@@ -31,7 +33,13 @@ $pageTitle = 'Assignments';
 <body>
     <div class="container-fluid">
         <div class="row">
-            <?php include 'includes/sidebar.php'; ?>
+            <?php
+                if (isStaff() && !isAdmin()) {
+                    include 'includes/staff-sidebar.php';
+                } else {
+                    include 'includes/sidebar.php';
+                }
+            ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">

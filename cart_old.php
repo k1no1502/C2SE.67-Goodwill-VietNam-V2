@@ -93,7 +93,7 @@ include 'includes/header.php';
                         <?php foreach ($cartItems as $item): ?>
                             <?php
                             $images = json_decode($item['images'] ?? '[]', true);
-                            $imageUrl = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                            $imageUrl = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
                             $itemTotal = $item['sale_price'] * $item['quantity'];
                             ?>
                             <div class="card shadow-sm mb-3 cart-item" data-cart-id="<?php echo $item['cart_id']; ?>">

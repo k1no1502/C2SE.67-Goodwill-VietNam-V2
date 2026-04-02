@@ -449,7 +449,7 @@ include 'includes/header.php';
                         <?php foreach ($cartItems as $item): ?>
                             <?php
                             $images = json_decode($item['images'] ?? '[]', true);
-                            $firstImage = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                            $firstImage = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
                             $itemTotal = $item['price_type'] === 'free' ? 0 : $item['sale_price'] * $item['cart_quantity'];
                             ?>
                             <div class="d-flex align-items-center mb-2">

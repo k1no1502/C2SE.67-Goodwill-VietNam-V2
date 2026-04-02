@@ -4,6 +4,8 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireStaffOrAdmin();
+enforceStaffPanelAccess(['warehouse']);
+$panelType = 'warehouse';
 
 // Handle price type update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -16,6 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $sale_price   = (float)($_POST['sale_price'] ?? 0);
                 $new_name     = trim($_POST['name'] ?? '');
                 $new_desc     = trim($_POST['description'] ?? '');
+                $new_image    = trim($_POST['image_path'] ?? '');
+                $remove_image = (int)($_POST['remove_image'] ?? 0) === 1;
 
                 $columns   = ['price_type = ?', 'sale_price = ?'];
                 $values    = [$price_type, $sale_price];
@@ -29,10 +33,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $values[]  = $new_desc;
                 }
 
+                $finalImage = null;
+                if (isset($_FILES['image_file']) && ($_FILES['image_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                    $uploadResult = uploadFile($_FILES['image_file'], '../uploads/donations/', ['jpg', 'jpeg', 'png', 'gif']);
+                    if (!($uploadResult['success'] ?? false)) {
+                        throw new Exception('Upload ảnh thất bại: ' . ($uploadResult['message'] ?? 'Unknown error'));
+                    }
+                    $finalImage = 'uploads/donations/' . $uploadResult['filename'];
+                } elseif ($remove_image) {
+                    $finalImage = 'placeholder-default.svg';
+                } elseif ($new_image !== '') {
+                    $finalImage = ltrim($new_image, '/');
+                }
+
+                if ($finalImage !== null) {
+                    $columns[] = 'images = ?';
+                    $values[] = json_encode([$finalImage], JSON_UNESCAPED_UNICODE);
+                }
+
                 Database::execute(
                     "UPDATE inventory SET " . implode(', ', $columns) . ", updated_at = NOW() WHERE item_id = ?",
                     array_merge($values, [$item_id])
                 );
+
+                if ($finalImage !== null) {
+                    $donationId = (int)(Database::fetch(
+                        "SELECT donation_id FROM inventory WHERE item_id = ?",
+                        [$item_id]
+                    )['donation_id'] ?? 0);
+                    if ($donationId > 0) {
+                        Database::execute(
+                            "UPDATE donations SET images = ?, updated_at = NOW() WHERE donation_id = ?",
+                            [json_encode([$finalImage], JSON_UNESCAPED_UNICODE), $donationId]
+                        );
+                    }
+                }
                 setFlashMessage('success', 'Đã cập nhật thông tin vật phẩm.');
             } elseif ($action === 'toggle_sale') {
                 Database::execute(
@@ -309,13 +344,15 @@ $inventoryStats = [
 
         /* ── Modal ── */
         .inventory-edit-modal .modal-dialog {
-            max-width: 760px;
+            max-width: min(760px, calc(100vw - 1.5rem));
+            margin: 0.75rem auto;
         }
         .inventory-edit-modal .modal-content {
             border: 1px solid #d6eaf1;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 20px 44px rgba(5, 73, 92, 0.22);
+            max-height: calc(100vh - 1.5rem);
         }
         .inventory-edit-modal .modal-header {
             background: linear-gradient(140deg, #f2fbfe 0%, #e8f4fb 100%);
@@ -336,6 +373,9 @@ $inventoryStats = [
         .inventory-edit-modal .modal-body {
             background: #f8fcfe;
             padding: 1.15rem 1.25rem;
+            overflow-y: auto;
+            overflow-x: hidden;
+            max-height: calc(100vh - 220px);
         }
         .inventory-edit-modal .edit-form-grid {
             display: grid;
@@ -368,6 +408,21 @@ $inventoryStats = [
             background: #eef8fc;
             color: #0e7490;
             font-weight: 700;
+        }
+        .inventory-edit-modal .image-editor {
+            display: grid;
+            gap: 0.55rem;
+        }
+        .inventory-edit-modal .image-editor-preview {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .inventory-edit-modal .image-editor-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.55rem;
+            align-items: center;
         }
         .inventory-edit-modal .modal-footer {
             border-top: 1px solid #d6eaf1;
@@ -427,6 +482,15 @@ $inventoryStats = [
             .inventory-edit-modal .modal-dialog {
                 margin: 0.7rem;
             }
+            .inventory-edit-modal .modal-content {
+                max-height: calc(100vh - 1.4rem);
+            }
+            .inventory-edit-modal .modal-body {
+                max-height: calc(100vh - 190px);
+            }
+            .inventory-edit-modal .image-editor-actions {
+                grid-template-columns: 1fr;
+            }
 
             .inventory-edit-modal .btn-modal-cancel,
             .inventory-edit-modal .btn-modal-submit {
@@ -439,7 +503,13 @@ $inventoryStats = [
 <body>
     <div class="container-fluid">
         <div class="row">
-            <?php include 'includes/sidebar.php'; ?>
+            <?php
+                if (isStaff() && !isAdmin()) {
+                    include 'includes/staff-sidebar.php';
+                } else {
+                    include 'includes/sidebar.php';
+                }
+            ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="inventory-topbar">
@@ -540,6 +610,7 @@ $inventoryStats = [
                             <thead>
                                 <tr>
                                     <th>ID</th>
+                                    <th>Ảnh</th>
                                     <th>Vật phẩm</th>
                                     <th>Danh mục</th>
                                     <th>Số lượng</th>
@@ -552,12 +623,24 @@ $inventoryStats = [
                             <tbody>
                                 <?php if (empty($items)): ?>
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted py-4">Không có vật phẩm nào.</td>
+                                        <td colspan="9" class="text-center text-muted py-4">Không có vật phẩm nào.</td>
                                     </tr>
                                 <?php else: ?>
                                 <?php foreach ($items as $item): ?>
                                 <tr>
                                     <td><?php echo $item['item_id']; ?></td>
+                                    <td>
+                                        <?php
+                                        $images = json_decode($item['images'] ?? '[]', true);
+                                        $firstImage = !empty($images)
+                                            ? resolveDonationImageUrl((string)$images[0])
+                                            : 'uploads/donations/placeholder-default.svg';
+                                        ?>
+                                        <img src="<?php echo htmlspecialchars($firstImage); ?>"
+                                             alt="Ảnh sản phẩm"
+                                             style="width: 56px; height: 56px; object-fit: cover; border-radius: 10px; border: 1px solid #d7e9f0;"
+                                             onerror="this.src='../uploads/donations/placeholder-default.svg'">
+                                    </td>
                                     <td>
                                         <strong><?php echo htmlspecialchars($item['name']); ?></strong>
                                         <br><small class="text-muted">Từ: <?php echo htmlspecialchars($item['donor_name']); ?></small>
@@ -632,7 +715,7 @@ $inventoryStats = [
                                 <div class="modal fade inventory-edit-modal" id="editModal<?php echo $item['item_id']; ?>" tabindex="-1">
                                     <div class="modal-dialog">
                                         <div class="modal-content">
-                                            <form method="POST">
+                                            <form method="POST" enctype="multipart/form-data">
                                                 <div class="modal-header">
                                                     <div>
                                                         <h5 class="modal-title">Cập nhật giá bán</h5>
@@ -653,6 +736,45 @@ $inventoryStats = [
                                                     <div>
                                                         <label class="form-label">Mô tả</label>
                                                         <textarea class="form-control" name="description" rows="3" placeholder="Cập nhật mô tả sản phẩm"><?php echo htmlspecialchars($item['description']); ?></textarea>
+                                                    </div>
+                                                    <?php
+                                                    $editImages = json_decode($item['images'] ?? '[]', true);
+                                                    $editImageValue = !empty($editImages) ? (string)$editImages[0] : '';
+                                                    $editImagePreview = $editImageValue !== ''
+                                                        ? resolveDonationImageUrl($editImageValue)
+                                                        : 'uploads/donations/placeholder-default.svg';
+                                                    ?>
+                                                    <div>
+                                                        <label class="form-label">Hình ảnh sản phẩm</label>
+                                                        <input type="hidden" name="remove_image" id="removeImage<?php echo $item['item_id']; ?>" value="0">
+                                                        <div class="image-editor">
+                                                            <div class="image-editor-preview">
+                                                                <img src="<?php echo htmlspecialchars($editImagePreview); ?>"
+                                                                     id="imagePreview<?php echo $item['item_id']; ?>"
+                                                                     alt="Preview"
+                                                                     style="width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid #d7e9f0;"
+                                                                     onerror="this.src='../uploads/donations/placeholder-default.svg'">
+                                                                <small class="text-muted">Nhập link đầy đủ hoặc path như picture_Database/ten-anh.jpg</small>
+                                                            </div>
+                                                            <input type="text"
+                                                                   class="form-control"
+                                                                   name="image_path"
+                                                                   id="imagePath<?php echo $item['item_id']; ?>"
+                                                                   value="<?php echo htmlspecialchars($editImageValue); ?>"
+                                                                   placeholder="https://... hoặc picture_Database/ten-anh.jpg">
+                                                            <div class="image-editor-actions">
+                                                                <input type="file"
+                                                                       class="form-control"
+                                                                       name="image_file"
+                                                                       accept="image/png,image/jpeg,image/gif"
+                                                                       onchange="previewUploadedImage(this, '<?php echo $item['item_id']; ?>')">
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-danger"
+                                                                        onclick="markDeleteImage('<?php echo $item['item_id']; ?>')">
+                                                                    <i class="bi bi-trash me-1"></i>Xóa ảnh
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <div class="row g-3">
                                                         <div class="col-md-6">
@@ -731,6 +853,28 @@ $inventoryStats = [
             if (idx > 0) bd.remove();
         });
     });
+
+    function markDeleteImage(itemId) {
+        const removeInput = document.getElementById('removeImage' + itemId);
+        const pathInput = document.getElementById('imagePath' + itemId);
+        const preview = document.getElementById('imagePreview' + itemId);
+        if (removeInput) removeInput.value = '1';
+        if (pathInput) pathInput.value = '';
+        if (preview) preview.src = '../uploads/donations/placeholder-default.svg';
+    }
+
+    function previewUploadedImage(input, itemId) {
+        const removeInput = document.getElementById('removeImage' + itemId);
+        const preview = document.getElementById('imagePreview' + itemId);
+        if (removeInput) removeInput.value = '0';
+        if (!preview || !input.files || !input.files[0]) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            preview.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
     </script>
 </body>
 </html>

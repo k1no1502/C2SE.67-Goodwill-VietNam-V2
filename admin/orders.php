@@ -4,6 +4,8 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireStaffOrAdmin();
+enforceStaffPanelAccess(['orders', 'cashier']);
+$panelType = getStaffPanelKey() === 'cashier' ? 'cashier' : 'orders';
 
 function ensureOrdersLogisticsSchema(): void
 {
@@ -683,7 +685,13 @@ $pageTitle = "Quản lý đơn hàng";
 <body>
     <div class="container-fluid">
         <div class="row">
-            <?php include 'includes/sidebar.php'; ?>
+            <?php
+                if (isStaff() && !isAdmin()) {
+                    include 'includes/staff-sidebar.php';
+                } else {
+                    include 'includes/sidebar.php';
+                }
+            ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="orders-topbar">
