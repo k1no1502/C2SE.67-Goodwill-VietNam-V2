@@ -3,51 +3,57 @@ session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
+// Kiểm tra quyền truy cập của nhân viên hoặc quản trị viên
 requireStaffOrAdmin();
 enforceStaffPanelAccess(['orders']);
 $panelType = 'orders';
 
-// Handle actions
+// Xử lý các hành động từ form POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $cart_id = (int)($_POST['cart_id'] ?? 0);
-    $action = $_POST['action'];
-    
+    $cart_id = (int)($_POST['cart_id'] ?? 0); // Lấy ID giỏ hàng từ form
+    $action = $_POST['action']; // Lấy hành động từ form
+
     if ($cart_id > 0) {
         try {
             if ($action === 'update_quantity') {
-                $quantity = (int)($_POST['quantity'] ?? 1);
-                
+                $quantity = (int)($_POST['quantity'] ?? 1); // Lấy số lượng mới từ form
+
                 if ($quantity <= 0) {
                     throw new Exception('Số lượng phải lớn hơn 0.');
                 }
-                
-                // Check available quantity
-                $cart = Database::fetch("
-                    SELECT c.*, i.quantity as inventory_quantity,
+
+                // Kiểm tra số lượng có sẵn trong kho
+                $cart = Database::fetch(
+                    "SELECT c.*, i.quantity as inventory_quantity,
                            (i.quantity - COALESCE((SELECT SUM(quantity) FROM cart WHERE item_id = i.item_id AND cart_id != ?), 0)) as available_quantity
                     FROM cart c
                     JOIN inventory i ON c.item_id = i.item_id
-                    WHERE c.cart_id = ?
-                ", [$cart_id, $cart_id]);
-                
+                    WHERE c.cart_id = ?",
+                    [$cart_id, $cart_id]
+                );
+
                 if ($quantity > $cart['available_quantity']) {
                     throw new Exception('Số lượng vượt quá số lượng có sẵn.');
                 }
-                
+
+                // Cập nhật số lượng trong giỏ hàng
                 Database::execute(
                     "UPDATE cart SET quantity = ?, updated_at = NOW() WHERE cart_id = ?",
                     [$quantity, $cart_id]
                 );
                 setFlashMessage('success', 'Đã cập nhật số lượng.');
                 logActivity($_SESSION['user_id'], 'update_cart', "Updated cart #$cart_id quantity to $quantity");
-                
+
             } elseif ($action === 'delete') {
+                // Xóa sản phẩm khỏi giỏ hàng
                 Database::execute("DELETE FROM cart WHERE cart_id = ?", [$cart_id]);
                 setFlashMessage('success', 'Đã xóa sản phẩm khỏi giỏ hàng.');
                 logActivity($_SESSION['user_id'], 'delete_cart', "Deleted cart item #$cart_id");
+
             } elseif ($action === 'clear_user_cart') {
-                $user_id = (int)($_POST['user_id'] ?? 0);
+                $user_id = (int)($_POST['user_id'] ?? 0); // Lấy ID người dùng từ form
                 if ($user_id > 0) {
+                    // Xóa toàn bộ giỏ hàng của người dùng
                     Database::execute("DELETE FROM cart WHERE user_id = ?", [$user_id]);
                     setFlashMessage('success', 'Đã xóa toàn bộ giỏ hàng của người dùng.');
                     logActivity($_SESSION['user_id'], 'clear_user_cart', "Cleared cart for user #$user_id");
@@ -57,18 +63,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             setFlashMessage('error', 'Có lỗi xảy ra: ' . $e->getMessage());
         }
     }
-    
+
+    // Chuyển hướng về trang quản lý giỏ hàng
     header('Location: carts.php');
     exit();
 }
 
-// Get filters
-$user_id = (int)($_GET['user_id'] ?? 0);
-$search = $_GET['search'] ?? '';
-$page = (int)($_GET['page'] ?? 1);
-$per_page = 20;
-$offset = ($page - 1) * $per_page;
+// Lấy các bộ lọc từ URL
+$user_id = (int)($_GET['user_id'] ?? 0); // Lọc theo người dùng
+$search = $_GET['search'] ?? ''; // Tìm kiếm theo từ khóa
+$page = max(1, (int)($_GET['page'] ?? 1)); // Trang hiện tại, mặc định là 1
+$per_page = 20; // Số lượng mục trên mỗi trang
+$offset = ($page - 1) * $per_page; // Tính toán offset cho SQL
 
+// Xây dựng điều kiện WHERE cho truy vấn
 $where = "1=1";
 $params = [];
 
@@ -85,15 +93,15 @@ if ($search !== '') {
     $params[] = $searchParam;
 }
 
-// Get total count
+// Lấy tổng số giỏ hàng
 $totalSql = "SELECT COUNT(*) as count FROM cart c 
              LEFT JOIN users u ON c.user_id = u.user_id 
              LEFT JOIN inventory i ON c.item_id = i.item_id 
              WHERE $where";
 $totalCarts = Database::fetch($totalSql, $params)['count'];
-$totalPages = ceil($totalCarts / $per_page);
+$totalPages = ceil($totalCarts / $per_page); // Tính tổng số trang
 
-// Get cart items
+// Lấy danh sách giỏ hàng
 $sql = "SELECT c.*, 
                u.name as user_name, u.email as user_email,
                i.name as item_name, i.sale_price, i.price_type, i.status as item_status,
@@ -111,19 +119,19 @@ $params[] = $per_page;
 $params[] = $offset;
 $cartItems = Database::fetchAll($sql, $params);
 
-// Get all users for filter
+// Lấy danh sách người dùng để lọc
 $users = Database::fetchAll("SELECT user_id, name, email FROM users ORDER BY name");
 
-// Get statistics
+// Lấy thống kê giỏ hàng
 $stats = [
     'total_carts' => Database::fetch("SELECT COUNT(*) as count FROM cart")['count'],
     'total_users' => Database::fetch("SELECT COUNT(DISTINCT user_id) as count FROM cart")['count'],
     'total_items' => Database::fetch("SELECT SUM(quantity) as count FROM cart")['count'] ?? 0,
-    'total_value' => Database::fetch("
-        SELECT SUM(c.quantity * COALESCE(i.sale_price, 0)) as total
+    'total_value' => Database::fetch(
+        "SELECT SUM(c.quantity * COALESCE(i.sale_price, 0)) as total
         FROM cart c
-        LEFT JOIN inventory i ON c.item_id = i.item_id
-    ")['total'] ?? 0,
+        LEFT JOIN inventory i ON c.item_id = i.item_id"
+    )['total'] ?? 0,
 ];
 ?>
 <!DOCTYPE html>
