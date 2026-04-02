@@ -61,6 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              VALUES (?, ?, ?, ?, CURDATE(), 'active', NOW())",
                             [$application['user_id'], $employeeId, $application['position'], $application['phone']]
                         );
+                    } else {
+                        Database::execute(
+                            "UPDATE staff
+                             SET position = ?, phone = COALESCE(NULLIF(?, ''), phone), updated_at = NOW()
+                             WHERE staff_id = ?",
+                            [$application['position'], $application['phone'], $staff['staff_id']]
+                        );
                     }
 
                     Database::execute(
