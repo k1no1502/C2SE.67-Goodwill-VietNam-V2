@@ -9,7 +9,11 @@ require_once 'includes/functions.php';
 requireLogin();
 
 /**
- * Fallback placeholder image for donations without uploads/links.
+ * Hàm tạo hình ảnh SVG làm placeholder cho các vật phẩm quyên góp.
+ * @param string $label Nhãn hiển thị trên hình ảnh.
+ * @param string $bgColor Màu nền của hình ảnh.
+ * @param string $textColor Màu chữ của nhãn.
+ * @return string Chuỗi SVG được mã hóa base64.
  */
 function buildPlaceholderSvg(string $label, string $bgColor = '#f0f4ff', string $textColor = '#1d4ed8'): string
 {
@@ -29,6 +33,12 @@ SVG;
     return 'data:image/svg+xml;base64,' . base64_encode($svg);
 }
 
+/**
+ * Hàm lấy hình ảnh placeholder dựa trên tên vật phẩm hoặc danh mục.
+ * @param string $itemName Tên vật phẩm.
+ * @param string|null $categoryName Tên danh mục (nếu có).
+ * @return string Chuỗi SVG placeholder.
+ */
 function getDonationPlaceholder(string $itemName, ?string $categoryName = null): string
 {
     if ($categoryName && trim($categoryName) !== '') {
@@ -91,7 +101,12 @@ if (!empty($_GET['payment_error'])) {
 }
 
 /**
- * Create a transaction record for a money donation.
+ * Hàm xử lý tạo giao dịch tiền mặt.
+ * @param int $userId ID người dùng.
+ * @param float $amount Số tiền quyên góp.
+ * @param string $method Phương thức thanh toán.
+ * @param string $note Ghi chú (nếu có).
+ * @return int ID giao dịch vừa tạo.
  */
 function createMoneyDonationTransaction(int $userId, float $amount, string $method, string $note = ''): int
 {
@@ -104,7 +119,9 @@ function createMoneyDonationTransaction(int $userId, float $amount, string $meth
 }
 
 /**
- * Convert Excel column letters (e.g., A, B, AA) to zero-based index.
+ * Hàm chuyển đổi tên cột Excel (ví dụ: A, B, AA) thành chỉ số bắt đầu từ 0.
+ * @param string $letters Chuỗi tên cột.
+ * @return int Chỉ số.
  */
 function excelColumnToIndex(string $letters): int
 {
@@ -118,8 +135,9 @@ function excelColumnToIndex(string $letters): int
 }
 
 /**
- * Lightweight XLSX reader for the first sheet (returns array of rows).
- * Only uses built-in ZipArchive + SimpleXML.
+ * Hàm đọc dữ liệu từ file Excel/CSV.
+ * @param string $filePath Đường dẫn tới file.
+ * @return array Mảng dữ liệu từ file.
  */
 function readXlsxRows(string $filePath): array
 {
@@ -251,7 +269,9 @@ function readXlsxRows(string $filePath): array
 }
 
 /**
- * Normalize legacy-encoded Vietnamese text to UTF-8.
+ * Hàm chuẩn hóa văn bản tiếng Việt sang UTF-8.
+ * @param string $text Văn bản.
+ * @return string Chuỗi chuẩn hóa.
  */
 function normalizeVietnameseText(?string $text): string
 {
@@ -269,7 +289,9 @@ function normalizeVietnameseText(?string $text): string
 }
 
 /**
- * Safely detect encoding handling environments where specific names may be unsupported.
+ * Hàm an toàn để phát hiện mã hóa.
+ * @param string $text Văn bản.
+ * @return string|null Mã hóa.
  */
 function safeDetectEncoding(string $text): ?string
 {
