@@ -13,12 +13,51 @@ $categories = Database::fetchAll("SELECT * FROM categories WHERE status = 'activ
 
 $pageTitle = "Tạo chiến dịch";
 
+function extractYoutubeVideoId($input) {
+    $input = trim((string)$input);
+    if ($input === '') {
+        return '';
+    }
+
+    // Accept already-normalized IDs.
+    if (preg_match('/^[a-zA-Z0-9_-]{6,}$/', $input) && stripos($input, 'http') !== 0) {
+        return $input;
+    }
+
+    $parts = @parse_url($input);
+    if (!$parts || empty($parts['host'])) {
+        return '';
+    }
+
+    $host = strtolower($parts['host']);
+    $path = $parts['path'] ?? '';
+
+    if (strpos($host, 'youtu.be') !== false) {
+        $id = trim($path, '/');
+        return preg_match('/^[a-zA-Z0-9_-]{6,}$/', $id) ? $id : '';
+    }
+
+    if (strpos($host, 'youtube.com') !== false || strpos($host, 'youtube-nocookie.com') !== false) {
+        if (!empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+            if (!empty($query['v']) && preg_match('/^[a-zA-Z0-9_-]{6,}$/', $query['v'])) {
+                return $query['v'];
+            }
+        }
+
+        if (preg_match('#/(?:embed|shorts|live|reel|reels)/([a-zA-Z0-9_-]{6,})#i', $path, $matches)) {
+            return $matches[1];
+        }
+    }
+
+    return '';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
     $start_date = $_POST['start_date'] ?? '';
     $end_date = $_POST['end_date'] ?? '';
-    $video_type = sanitize($_POST['video_type'] ?? 'none');
     
     // Validate
     if (empty($name) || empty($description) || empty($start_date) || empty($end_date)) {
@@ -45,11 +84,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Handle video upload or YouTube link
+            // Handle multiple video types
             $videoPath = '';
             $youtubeLink = '';
+            $facebookLink = '';
+            $tiktokLink = '';
+            $videoType = 'none';
             
-            if ($video_type === 'upload') {
+            $uploadEnabled = isset($_POST['video_upload_enabled']) && $_POST['video_upload_enabled'] === '1';
+            $youtubeEnabled = isset($_POST['video_youtube_enabled']) && $_POST['video_youtube_enabled'] === '1';
+            $facebookEnabled = isset($_POST['video_facebook_enabled']) && $_POST['video_facebook_enabled'] === '1';
+            $tiktokEnabled = isset($_POST['video_tiktok_enabled']) && $_POST['video_tiktok_enabled'] === '1';
+            
+            // Count enabled types
+            $enabledCount = ($uploadEnabled ? 1 : 0) + ($youtubeEnabled ? 1 : 0) + ($facebookEnabled ? 1 : 0) + ($tiktokEnabled ? 1 : 0);
+            
+            // Handle upload video
+            if ($uploadEnabled) {
                 if (isset($_FILES['video']) && $_FILES['video']['error'] === UPLOAD_ERR_OK) {
                     $uploadDir = 'uploads/campaigns/videos/';
                     if (!is_dir($uploadDir)) {
@@ -65,31 +116,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     throw new Exception('Vui lòng chọn tệp video để upload.');
                 }
-            } elseif ($video_type === 'youtube') {
+            }
+            
+            // Handle YouTube link
+            if ($youtubeEnabled) {
                 $youtubeLink = trim(sanitize($_POST['youtube_link'] ?? ''));
                 if (empty($youtubeLink)) {
                     throw new Exception('Vui lòng nhập đường link YouTube.');
                 }
                 
-                // Extract YouTube video ID from various URL formats
-                if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/', $youtubeLink, $matches)) {
-                    $youtubeLink = $matches[1];
+                // Support regular YouTube videos, Shorts/Reels, and livestream links.
+                $youtubeId = extractYoutubeVideoId($youtubeLink);
+                if ($youtubeId !== '') {
+                    $youtubeLink = $youtubeId;
                 } else {
-                    throw new Exception('Đường link YouTube không hợp lệ. Vui lòng kiểm tra lại.');
+                    throw new Exception('Đường link YouTube không hợp lệ. Hỗ trợ video thường, Shorts/Reels và livestream.');
                 }
             }
             
+            // Handle Facebook livestream link
+            if ($facebookEnabled) {
+                $facebookLink = trim(sanitize($_POST['facebook_live_link'] ?? ''));
+                if (empty($facebookLink)) {
+                    throw new Exception('Vui lòng nhập đường link Facebook livestream.');
+                }
+                
+                // Validate Facebook URL
+                if (!preg_match('/(?:facebook\.com|fb\.watch)/', $facebookLink)) {
+                    throw new Exception('Đường link Facebook không hợp lệ. Vui lòng kiểm tra lại.');
+                }
+            }
+            
+            // Handle TikTok video link
+            if ($tiktokEnabled) {
+                $tiktokLink = trim(sanitize($_POST['tiktok_video_link'] ?? ''));
+                if (empty($tiktokLink)) {
+                    throw new Exception('Vui lòng nhập đường link TikTok.');
+                }
+                
+                // Validate TikTok URL (video or livestream)
+                if (!preg_match('/(?:tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com)/', $tiktokLink)) {
+                    throw new Exception('Đường link TikTok không hợp lệ. Vui lòng dùng link video hoặc livestream TikTok.');
+                }
+            }
+            
+            // Determine video_type
+            if ($enabledCount > 1) {
+                $videoType = 'multi';
+            } elseif ($uploadEnabled) {
+                $videoType = 'upload';
+            } elseif ($youtubeEnabled) {
+                $videoType = 'youtube';
+            } elseif ($facebookEnabled) {
+                $videoType = 'facebook';
+            } elseif ($tiktokEnabled) {
+                $videoType = 'tiktok';
+            }
+            
             // Insert campaign with pending status for admin approval
-            $sql = "INSERT INTO campaigns (name, description, image, video_type, video_file, video_youtube, 
+            $sql = "INSERT INTO campaigns (name, description, image, video_type, video_file, video_youtube, video_facebook, video_tiktok,
                     start_date, end_date, target_items, status, created_by, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
             Database::execute($sql, [
                 $name,
                 $description,
                 $imagePath,
-                $video_type,
+                $videoType,
                 $videoPath,
                 $youtubeLink,
+                $facebookLink,
+                $tiktokLink,
                 $start_date,
                 $end_date,
                 $_SESSION['user_id']
@@ -377,51 +473,76 @@ include 'includes/header.php';
 
                             <!-- Video Section -->
                             <div class="mb-3">
-                                <label class="form-label">Video chiến dịch</label>
-                                <div class="btn-group w-100 mb-3 video-tab-group" role="group" id="video_type_group">
-                                    <input type="radio" 
-                                           class="btn-check" 
-                                           name="video_type" 
-                                           id="video_none" 
-                                           value="none"
-                                           checked>
-                                    <label class="btn btn-outline-secondary" for="video_none">
-                                        <i class="bi bi-x-circle me-2"></i>Không có video
-                                    </label>
-                                    
-                                    <input type="radio" 
-                                           class="btn-check" 
-                                           name="video_type" 
-                                           id="video_upload" 
-                                           value="upload">
-                                    <label class="btn btn-outline-secondary" for="video_upload">
-                                        <i class="bi bi-upload me-2"></i>Upload video
-                                    </label>
-                                    
-                                    <input type="radio" 
-                                           class="btn-check" 
-                                           name="video_type" 
-                                           id="video_youtube" 
-                                           value="youtube">
-                                    <label class="btn btn-outline-secondary" for="video_youtube">
-                                        <i class="bi bi-youtube me-2"></i>YouTube
-                                    </label>
+                                <label class="form-label">Video chiến dịch (có thể chọn nhiều)</label>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check p-3 border rounded" style="background-color: #f8fbfd;">
+                                            <input class="form-check-input video-checkbox" type="checkbox" name="video_upload_enabled" id="video_upload" value="1">
+                                            <label class="form-check-label" for="video_upload">
+                                                <i class="bi bi-upload me-2"></i><strong>Upload video</strong>
+                                                <small class="d-block text-muted mt-1">MP4, AVI, MOV, WebM, MKV, FLV (tối đa 500MB)</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check p-3 border rounded" style="background-color: #f8fbfd;">
+                                            <input class="form-check-input video-checkbox" type="checkbox" name="video_youtube_enabled" id="video_youtube" value="1">
+                                            <label class="form-check-label" for="video_youtube">
+                                                <i class="bi bi-youtube me-2"></i><strong>YouTube</strong>
+                                                <small class="d-block text-muted mt-1">Nhúng video từ YouTube</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check p-3 border rounded" style="background-color: #f8fbfd;">
+                                            <input class="form-check-input video-checkbox" type="checkbox" name="video_facebook_enabled" id="video_facebook" value="1">
+                                            <label class="form-check-label" for="video_facebook">
+                                                <i class="bi bi-facebook me-2"></i><strong>Facebook Livestream</strong>
+                                                <small class="d-block text-muted mt-1">Link livestream từ Facebook</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check p-3 border rounded" style="background-color: #f8fbfd;">
+                                            <input class="form-check-input video-checkbox" type="checkbox" name="video_tiktok_enabled" id="video_tiktok" value="1">
+                                            <label class="form-check-label" for="video_tiktok">
+                                                <i class="bi bi-play-circle me-2"></i><strong>TikTok</strong>
+                                                <small class="d-block text-muted mt-1">Video TikTok</small>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div id="video_upload_section" style="display: none;">
-                                    <div class="alert-note p-3 mb-3">
-                                        <i class="bi bi-info-circle me-2"></i>
-                                        <strong>Định dạng được hỗ trợ:</strong> MP4, AVI, MOV, WebM, MKV, FLV (Tối đa 500MB)
-                                    </div>
+                                <!-- Upload Video Input -->
+                                <div id="video_upload_section" class="mb-3" style="display: none;">
+                                    <label class="form-label">Chọn file video</label>
                                     <input type="file" class="form-control" id="video_file" name="video" 
                                            accept="video/*" data-max-size="524288000">
                                     <div class="form-text">Tải lên tệp video từ máy tính của bạn</div>
                                 </div>
 
-                                <div id="video_youtube_section" style="display: none;">
+                                <!-- YouTube Link Input -->
+                                <div id="video_youtube_section" class="mb-3" style="display: none;">
+                                    <label class="form-label">Đường link YouTube</label>
                                     <input type="text" class="form-control" id="youtube_link" name="youtube_link" 
-                                           placeholder="Ví dụ: https://www.youtube.com/watch?v=...">
-                                    <div class="form-text">Nhập đường link YouTube (https://youtube.com/... hoặc https://youtu.be/...)</div>
+                                           placeholder="Ví dụ: https://www.youtube.com/watch?v=..., /shorts/... hoặc /live/...">
+                                    <div class="form-text">Hỗ trợ video thường, Shorts/Reels và livestream YouTube.</div>
+                                </div>
+
+                                <!-- Facebook Livestream Input -->
+                                <div id="video_facebook_section" class="mb-3" style="display: none;">
+                                    <label class="form-label">Đường link Facebook Livestream</label>
+                                    <input type="text" class="form-control" id="facebook_live_link" name="facebook_live_link" 
+                                           placeholder="Ví dụ: https://www.facebook.com/...">
+                                    <div class="form-text">Nhập đường link Facebook livestream</div>
+                                </div>
+
+                                <!-- TikTok Video Link Input -->
+                                <div id="video_tiktok_section" class="mb-3" style="display: none;">
+                                    <label class="form-label">Đường link TikTok</label>
+                                    <input type="text" class="form-control" id="tiktok_video_link" name="tiktok_video_link" 
+                                           placeholder="Ví dụ: https://www.tiktok.com/@username/video/... hoặc /live hoặc https://vt.tiktok.com/...">
+                                    <div class="form-text">Hỗ trợ video TikTok thường và TikTok livestream.</div>
                                 </div>
                             </div>
                         </div>
@@ -581,7 +702,6 @@ document.getElementById('add-item').addEventListener('click', function() {
             </button>
         </div>
     `;
-    `;
     
     container.appendChild(newItem);
     itemIndex++;
@@ -593,29 +713,36 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Video type handling
-function updateVideoSection() {
-    const videoType = document.querySelector('input[name="video_type"]:checked').value;
-    const uploadSection = document.getElementById('video_upload_section');
-    const youtubeSection = document.getElementById('video_youtube_section');
-    const videoFileInput = document.getElementById('video_file');
-    const youtubeInput = document.getElementById('youtube_link');
+// Video type handling with checkboxes
+function updateVideoSections() {
+    const uploadChecked = document.getElementById('video_upload').checked;
+    const youtubeChecked = document.getElementById('video_youtube').checked;
+    const facebookChecked = document.getElementById('video_facebook').checked;
+    const tiktokChecked = document.getElementById('video_tiktok').checked;
     
-    uploadSection.style.display = videoType === 'upload' ? 'block' : 'none';
-    youtubeSection.style.display = videoType === 'youtube' ? 'block' : 'none';
+    document.getElementById('video_upload_section').style.display = uploadChecked ? 'block' : 'none';
+    document.getElementById('video_youtube_section').style.display = youtubeChecked ? 'block' : 'none';
+    document.getElementById('video_facebook_section').style.display = facebookChecked ? 'block' : 'none';
+    document.getElementById('video_tiktok_section').style.display = tiktokChecked ? 'block' : 'none';
     
-    // Clear inputs when switching
-    if (videoType !== 'upload') {
-        videoFileInput.value = '';
+    // Clear inputs when unchecked
+    if (!uploadChecked) {
+        document.getElementById('video_file').value = '';
     }
-    if (videoType !== 'youtube') {
-        youtubeInput.value = '';
+    if (!youtubeChecked) {
+        document.getElementById('youtube_link').value = '';
+    }
+    if (!facebookChecked) {
+        document.getElementById('facebook_live_link').value = '';
+    }
+    if (!tiktokChecked) {
+        document.getElementById('tiktok_video_link').value = '';
     }
 }
 
-// Add event listeners for video type radio buttons
-document.querySelectorAll('input[name="video_type"]').forEach(radio => {
-    radio.addEventListener('change', updateVideoSection);
+// Add event listeners for video checkboxes
+document.querySelectorAll('.video-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', updateVideoSections);
 });
 
 // Validate video file size on selection

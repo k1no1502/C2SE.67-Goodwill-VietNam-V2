@@ -175,6 +175,7 @@ if (isLoggedIn()) {
 }
 
 $images = json_decode($item['images'] ?? '[]', true);
+$imageUrls = array_map(static fn($image) => resolveDonationImageUrl((string)$image), $images);
 $availableQty = max(0, (int)($item['available_quantity'] ?? 0));
 $pageTitle = $item['name'];
 include 'includes/header.php';
@@ -331,7 +332,7 @@ include 'includes/header.php';
                         <?php if (!empty($images)): ?>
                             <div class="position-relative">
                                 <img id="mainImage"
-                                     src="uploads/donations/<?php echo $images[0]; ?>"
+                                     src="<?php echo htmlspecialchars($imageUrls[0]); ?>"
                                      class="img-fluid w-100 rounded-3"
                                      style="height: 460px; object-fit: cover;"
                                      onerror="this.src='uploads/donations/placeholder-default.svg'"
@@ -344,11 +345,11 @@ include 'includes/header.php';
                             </div>
                             <?php if (count($images) > 1): ?>
                                 <div class="thumb-strip row g-2 mt-2">
-                                    <?php foreach ($images as $index => $img): ?>
+                                    <?php foreach ($imageUrls as $index => $imgUrl): ?>
                                         <div class="col-3">
-                                            <img src="uploads/donations/<?php echo $img; ?>"
+                                            <img src="<?php echo htmlspecialchars($imgUrl); ?>"
                                                  class="img-fluid thumbnail-img <?php echo $index === 0 ? 'active' : ''; ?>"
-                                                 onclick="changeMainImage('uploads/donations/<?php echo $img; ?>', this)"
+                                                 onclick="changeMainImage('<?php echo htmlspecialchars($imgUrl, ENT_QUOTES); ?>', this)"
                                                  onerror="this.src='uploads/donations/placeholder-default.svg'"
                                                  alt="Ảnh phụ">
                                         </div>
@@ -618,7 +619,7 @@ include 'includes/header.php';
             <div class="row g-3">
                 <?php foreach ($relatedItems as $relatedItem):
                     $relatedImages = json_decode($relatedItem['images'] ?? '[]', true);
-                    $relatedImageUrl = !empty($relatedImages) ? 'uploads/donations/' . $relatedImages[0] : 'uploads/donations/placeholder-default.svg';
+                    $relatedImageUrl = !empty($relatedImages) ? resolveDonationImageUrl((string)$relatedImages[0]) : 'uploads/donations/placeholder-default.svg';
                     $relatedPriceDisplay = $relatedItem['price_type'] === 'free' ? 'Miễn phí' : formatCurrency($relatedItem['sale_price']);
                 ?>
                     <div class="col-6 col-md-4 col-lg-3">

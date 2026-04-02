@@ -95,8 +95,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng nhập - Goodwill Vietnam</title>
     
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
     <link href="assets/css/style.css" rel="stylesheet">
     
     <style>
@@ -527,7 +530,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <!-- Login Container -->
     <div class="login-container">
+        <!-- Left Side - Decorative -->
         <div class="login-left">
             <img class="showcase-image-bg"
                  src="https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcQPQXn_GgKBFI5Hzq6l550Z0v4-S5jJRPY_NKpjdyEJTP9f3jK4foV_uJl5xFLMxOywzX97LuTBlkvOooHxSjmDA29xVDmTYpzoHZR0O_ZYT1TirpDzg9Fb&amp;usqp=CAc"
@@ -547,6 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
         
+        <!-- Right Side - Login Form -->
         <div class="login-right">
             <div class="login-form-wrapper">
                 <div class="form-brand">
@@ -647,7 +653,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
     <script src="assets/js/main.js"></script>
     
     <script>

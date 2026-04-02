@@ -8,7 +8,7 @@ if (!isLoggedIn()) {
     exit();
 }
 
-$pageTitle = "Tuyen nhan vien";
+$pageTitle = "Tuyển nhân viên";
 $error = '';
 $success = '';
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -18,8 +18,23 @@ $userName = $_SESSION['name'] ?? '';
 $userEmail = $_SESSION['email'] ?? '';
 $userPhone = '';
 
-// Default values to avoid blank page if database tables are missing.
+$defaultPositionNames = [
+    'Quản lý kho hàng',
+    'Quản lý đơn hàng',
+    'Quản lý chiến dịch',
+    'Tư vấn chăm sóc khách hàng',
+    'Thu ngân'
+];
+
 $positions = [];
+foreach ($defaultPositionNames as $idx => $name) {
+    $positions[] = [
+        'position_id' => $idx + 1,
+        'position_name' => $name
+    ];
+}
+
+// Default values to avoid blank page if database tables are missing.
 $latestApplication = null;
 
 try {
@@ -31,8 +46,11 @@ try {
         $userPhone = $userInfo['phone'] ?? '';
     }
 
-    // Get recruitment positions from database
-    $positions = Database::fetchAll("SELECT position_id, position_name FROM recruitment_positions WHERE is_active = 1 ORDER BY position_name");
+    // Get recruitment positions from database (fallback to defaults if empty)
+    $dbPositions = Database::fetchAll("SELECT position_id, position_name FROM recruitment_positions WHERE is_active = 1 ORDER BY sort_order ASC, position_name ASC");
+    if (!empty($dbPositions)) {
+        $positions = $dbPositions;
+    }
 
     $latestApplication = Database::fetch(
         "SELECT application_id, status FROM recruitment_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -40,19 +58,18 @@ try {
     );
 } catch (Exception $e) {
     error_log('Recruitment page load error: ' . $e->getMessage());
-    $error = 'Chuc nang tuyen dung chua san sang. Vui long chay migration va thu lai.';
 }
 
 if (isset($_GET['submitted']) && $_GET['submitted'] === '1') {
-    $success = 'Da gui don dang ky. Chung toi se lien he som.';
+    $success = 'Đã gửi đơn đăng ký. Chúng tôi sẽ liên hệ sớm.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
     if (!validateCSRFToken($csrf)) {
-        $error = 'Yeu cau khong hop le. Vui long thu lai.';
+        $error = 'Yêu cầu không hợp lệ. Vui lòng thử lại.';
     } elseif ($latestApplication && $latestApplication['status'] === 'pending') {
-        $error = 'Don dang ky cua ban dang duoc xu ly.';
+        $error = 'Đơn đăng ký của bạn đang được xử lý.';
     } else {
         $fullName = sanitize($_POST['full_name'] ?? '');
         $email = sanitize($_POST['email'] ?? '');
@@ -63,16 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cvFilename = null;
 
         if ($fullName === '' || $email === '' || $phone === '' || $position === '') {
-            $error = 'Vui long nhap day du thong tin bat buoc.';
+            $error = 'Vui lòng nhập đầy đủ thông tin bắt buộc.';
         } elseif (!validateEmail($email)) {
-            $error = 'Email khong hop le.';
+            $error = 'Email không hợp lệ.';
         } else {
             if (isset($_FILES['cv_file']) && $_FILES['cv_file']['error'] !== UPLOAD_ERR_NO_FILE) {
                 $upload = uploadFile($_FILES['cv_file'], 'uploads/cv/', ['pdf', 'doc', 'docx']);
                 if ($upload['success']) {
                     $cvFilename = $upload['filename'];
                 } else {
-                    $error = 'CV khong hop le. Vui long chon file PDF, DOC hoac DOCX (toi da 5MB).';
+                    $error = 'CV không hợp lệ. Vui lòng chọn file PDF, DOC hoặc DOCX (tối đa 5MB).';
                 }
             }
         }
@@ -90,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             } catch (Exception $e) {
                 error_log('Recruitment apply error: ' . $e->getMessage());
-                $error = 'Co loi xay ra. Vui long thu lai sau khi migration hoan tat.';
+                $error = 'Có lỗi xảy ra. Vui lòng thử lại sau khi migration hoàn tất.';
             }
         }
     }
@@ -359,19 +376,19 @@ include 'includes/header.php';
             <div class="col-6 col-md-4">
                 <div class="mini-stat">
                     <span class="value"><?php echo (int)count($positions); ?>+</span>
-                    <span class="label">Vi tri mo</span>
+                    <span class="label">Vị trí mở</span>
                 </div>
             </div>
             <div class="col-6 col-md-4">
                 <div class="mini-stat">
                     <span class="value">48h</span>
-                    <span class="label">Phan hoi ho so</span>
+                    <span class="label">Phản hồi hồ sơ</span>
                 </div>
             </div>
             <div class="col-6 col-md-4">
                 <div class="mini-stat">
                     <span class="value">On-site</span>
-                    <span class="label">Linh hoat lich</span>
+                    <span class="label">Linh hoạt lịch</span>
                 </div>
             </div>
         </div>
@@ -379,7 +396,7 @@ include 'includes/header.php';
         <div class="row g-4 mt-1">
             <div class="col-md-6 fade-card">
                 <div class="soft-panel">
-                    <h4>Vi tri dang tuyen</h4>
+                    <h4>Vị trí đang tuyển</h4>
                     <?php if (!empty($positions)): ?>
                         <?php foreach ($positions as $pos): ?>
                             <div class="position-item">
@@ -390,14 +407,14 @@ include 'includes/header.php';
                     <?php else: ?>
                         <div class="position-item mb-0">
                             <i class="bi bi-info-circle"></i>
-                            <span>Chua co vi tri nao duoc mo. Vui long quay lai sau.</span>
+                            <span>Chưa có vị trí nào được mở. Vui lòng quay lại sau.</span>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
             <div class="col-md-6 fade-card">
                 <div class="soft-panel">
-                    <h4>Yeu cau chung</h4>
+                    <h4>Yêu cầu chung</h4>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Có tinh thần phục vụ cộng đồng</div>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Chủ động, trách nhiệm cao</div>
                     <div class="requirement-item"><i class="bi bi-check2-circle"></i>Kỹ năng giao tiếp tốt</div>
@@ -413,7 +430,7 @@ include 'includes/header.php';
                     <p class="form-subtitle mb-0">Điền thông tin để ứng tuyển. Đội ngũ tuyển dụng sẽ liên hệ sớm.</p>
                 </div>
                 <div class="col-lg-5 text-lg-end">
-                    <span class="processing-badge"><i class="bi bi-lightning-charge-fill"></i>Xu ly trong 2-3 ngay</span>
+                    <span class="processing-badge"><i class="bi bi-lightning-charge-fill"></i>Xử lý trong 2-3 ngày</span>
                 </div>
             </div>
 
@@ -457,11 +474,11 @@ include 'includes/header.php';
                     <div class="col-md-6 mb-3">
                         <label for="position" class="form-label">Vị trí ứng tuyển *</label>
                         <select class="form-select" id="position" name="position" required>
-                            <option value="" selected disabled>Chon vi tri</option>
+                            <option value="" selected disabled>Chọn vị trí</option>
                             <?php foreach ($positions as $pos): ?>
                             <option value="<?php echo htmlspecialchars($pos['position_name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($pos['position_name'], ENT_QUOTES, 'UTF-8'); ?></option>
                             <?php endforeach; ?>
-                            <option value="Khac">Khác</option>
+                            <option value="Khác">Khác</option>
                         </select>
                         <div class="invalid-feedback">Vui lòng chọn vị trí ứng tuyển.</div>
                     </div>
@@ -469,24 +486,24 @@ include 'includes/header.php';
 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="availability" class="form-label">Thoi gian lam viec</label>
+                        <label for="availability" class="form-label">Thời gian làm việc</label>
                         <select class="form-select" id="availability" name="availability">
                             <option value="Full-time">Full-time</option>
                             <option value="Part-time">Part-time</option>
-                            <option value="Thuc tap">Thuc tap</option>
+                            <option value="Thực tập">Thực tập</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="mb-3">
                     <label for="message" class="form-label">Giới thiệu</label>
-                    <textarea class="form-control" id="message" name="message" rows="4" placeholder="Gioi thieu ve ban va ly do ung tuyen"></textarea>
+                    <textarea class="form-control" id="message" name="message" rows="4" placeholder="Giới thiệu về bạn và lý do ứng tuyển"></textarea>
                 </div>
 
                 <div class="mb-3">
                     <label for="cv_file" class="form-label">CV (PDF, DOC, DOCX)</label>
                     <input type="file" class="form-control" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
-                    <div class="form-text">Toi da 5MB. Neu da nop don truoc do, khong can tai lai.</div>
+                    <div class="form-text">Tối đa 5MB. Nếu đã nộp đơn trước đó, không cần tải lại.</div>
                 </div>
 
                 <div class="d-grid d-md-flex gap-3">
@@ -497,7 +514,7 @@ include 'includes/header.php';
             </form>
 
             <p class="text-muted small mt-3 mb-0">
-                * Don se duoc gui den admin de phe duyet.
+                * Đơn sẽ được gửi đến admin để phê duyệt.
             </p>
         </div>
     </div>

@@ -3,7 +3,7 @@
 # Enable Rewrite Engine
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /GW_VN%20V5.2/
+    RewriteBase /
     
     # Redirect to HTTPS (uncomment when using SSL)
     # RewriteCond %{HTTPS} off
@@ -17,7 +17,7 @@
     # Fallback: any non-existent path goes to custom 404
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule . /GW_VN%20V5.2/404.html [L,R=404]
+    RewriteRule . /404.html [L,R=404]
     
     # Protect .htaccess
     <Files .htaccess>
@@ -39,9 +39,9 @@ AddDefaultCharset UTF-8
 Options -Indexes
 
 # Enable error documents
-ErrorDocument 404 /GW_VN%20V5.2/404.html
-ErrorDocument 403 /GW_VN%20V5.2/403.php
-ErrorDocument 500 /GW_VN%20V5.2/500.php
+ErrorDocument 404 /404.html
+ErrorDocument 403 /404.html
+ErrorDocument 500 /404.html
 
 # PHP Configuration
 <IfModule mod_php.c>

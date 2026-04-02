@@ -402,7 +402,9 @@ include 'includes/header.php';
                 <div class="row g-3">
                     <?php foreach ($items as $item):
                         $images = json_decode($item['images'] ?? '[]', true);
-                        $firstImage = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                        $firstImage = !empty($images)
+                            ? resolveDonationImageUrl((string)$images[0])
+                            : 'uploads/donations/placeholder-default.svg';
                         $priceDisplay = 'Liên hệ';
                         $badgeBg = '#0ea5e9'; $badgeColor = '#fff';
                         if ($item['price_type'] === 'free') {

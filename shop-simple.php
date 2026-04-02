@@ -135,7 +135,9 @@ include 'includes/header.php';
                     <?php foreach ($items as $item): ?>
                         <?php
                         $images = json_decode($item['images'] ?? '[]', true);
-                        $imageUrl = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                        $imageUrl = !empty($images)
+                            ? resolveDonationImageUrl((string)$images[0])
+                            : 'uploads/donations/placeholder-default.svg';
                         $priceDisplay = $item['price_type'] === 'free' ? 'MIỄN PHÍ' : formatCurrency($item['sale_price']);
                         $badgeClass = $item['price_type'] === 'free' ? 'bg-success' : 'bg-warning text-dark';
                         ?>

@@ -12,6 +12,7 @@ $pageTitle = "Hồ sơ cá nhân";
 
 // Get user data
 $user = getUserById($_SESSION['user_id']);
+$displayRole = getUserDisplayRole((int)$_SESSION['user_id'], isset($user['role_id']) ? (int)$user['role_id'] : null);
 
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -31,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['name'] = $name;
             $success = 'Cập nhật thông tin thành công!';
             $user = getUserById($_SESSION['user_id']); // Refresh user data
+            $displayRole = getUserDisplayRole((int)$_SESSION['user_id'], isset($user['role_id']) ? (int)$user['role_id'] : null);
         } catch (Exception $e) {
             error_log("Profile update error: " . $e->getMessage());
             $error = 'Có lỗi xảy ra khi cập nhật thông tin.';
@@ -173,7 +175,7 @@ include 'includes/header.php';
                                 <input type="text" 
                                        class="form-control" 
                                        id="role" 
-                                       value="<?php echo ucfirst($user['role']); ?>"
+                                       value="<?php echo htmlspecialchars($displayRole, ENT_QUOTES, 'UTF-8'); ?>"
                                        disabled>
                             </div>
                         </div>
