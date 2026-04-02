@@ -386,7 +386,7 @@ document.getElementById('new_password').addEventListener('input', function() {
         barColor = '#10b981';
     }
     
-    strengthDiv.innerHTML = '<i class="bi bi-shield me-1"></i>Độ mạnh: <strong class="' + color + '">' + text + '</strong>';
+    strengthDiv.innerHTML = '<i class=\"bi bi-shield me-1\"></i>Độ mạnh: <strong class=\"' + color + '\">' + text + '</strong>';
     strengthFill.style.width = width;
     strengthFill.style.backgroundColor = barColor;
 });
