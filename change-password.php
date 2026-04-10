@@ -61,24 +61,6 @@ include 'includes/header.php';
         margin-top: 5.2rem;
         margin-bottom: 2rem;
     }
-    .password-hero {
-        border: 1px solid #d9edf2;
-        border-radius: 20px;
-        padding: 1.25rem 1.4rem;
-        background:
-            radial-gradient(circle at 88% 10%, rgba(6, 182, 212, 0.16), transparent 40%),
-            linear-gradient(135deg, #f8fdff 0%, #edf9fc 100%);
-        box-shadow: 0 14px 34px rgba(8, 74, 92, 0.08);
-    }
-    .password-title {
-        color: #0f172a;
-        font-weight: 800;
-        margin-bottom: 0.4rem;
-    }
-    .password-subtitle {
-        color: #64748b;
-        margin-bottom: 0;
-    }
     .password-wrap {
         border: 1px solid #d9edf2;
         border-radius: 22px;
@@ -160,71 +142,20 @@ include 'includes/header.php';
         color: #0e7490;
         border-color: #8ecddd;
     }
-    .password-strength-bar {
-        height: 6px;
-        border-radius: 3px;
-        background: #e5e7eb;
-        overflow: hidden;
-        margin-top: 0.5rem;
-    }
-    .password-strength-fill {
-        height: 100%;
-        transition: width 0.3s ease, background-color 0.3s ease;
-    }
-    .breadcrumb {
-        background: transparent;
-        padding: 0;
-        margin-bottom: 1rem;
-    }
-    .breadcrumb-item a {
-        color: #06B6D4;
-        text-decoration: none;
-    }
-    .breadcrumb-item a:hover {
-        color: #0891b2;
-        text-decoration: underline;
-    }
-    .breadcrumb-item.active {
-        color: #64748b;
-    }
     @media (max-width: 991.98px) {
         .password-shell {
             margin-top: 4.9rem;
-        }
-        .password-hero {
-            padding: 1rem;
         }
     }
 </style>
 
 <div class="container password-shell">
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="index.php">Trang chủ</a></li>
-            <li class="breadcrumb-item"><a href="profile.php">Hồ sơ</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Đổi mật khẩu</li>
-        </ol>
-    </nav>
-
-    <!-- Page Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="password-hero">
-                <h1 class="display-6 password-title">
-                    <i class="bi bi-shield-lock me-2" style="color: #06B6D4;"></i>Đổi mật khẩu
-                </h1>
-                <p class="password-subtitle">Cập nhật mật khẩu định kỳ để tăng độ an toàn cho tài khoản của bạn.</p>
-            </div>
-        </div>
-    </div>
-
     <div class="row justify-content-center">
         <div class="col-lg-7 col-xl-6">
             <div class="password-wrap">
                 <div class="password-head">
-                    <h4><i class="bi bi-key me-2"></i>Thông tin mật khẩu</h4>
-                    <p>Nhập thông tin để thay đổi mật khẩu.</p>
+                    <h4><i class="bi bi-shield-lock me-2"></i>Đổi mật khẩu</h4>
+                    <p>Cập nhật mật khẩu định kỳ để tăng độ an toàn cho tài khoản của bạn.</p>
                 </div>
                 <div class="password-body">
                     <?php if ($success): ?>
@@ -285,9 +216,6 @@ include 'includes/header.php';
                                 </div>
                             </div>
                             <div class="form-text" id="passwordStrength"></div>
-                            <div class="password-strength-bar">
-                                <div class="password-strength-fill" id="passwordStrengthFill" style="width: 0%;"></div>
-                            </div>
                         </div>
 
                         <div class="mb-4">
@@ -349,20 +277,15 @@ function togglePassword(fieldId) {
 document.getElementById('new_password').addEventListener('input', function() {
     const password = this.value;
     const strengthDiv = document.getElementById('passwordStrength');
-    const strengthFill = document.getElementById('passwordStrengthFill');
     
     if (password.length === 0) {
         strengthDiv.innerHTML = '';
-        strengthFill.style.width = '0%';
-        strengthFill.style.backgroundColor = '#e5e7eb';
         return;
     }
     
     let strength = 0;
     let text = '';
     let color = '';
-    let barColor = '';
-    let width = '0%';
     
     if (password.length >= 6) strength++;
     if (password.length >= 8) strength++;
@@ -370,25 +293,18 @@ document.getElementById('new_password').addEventListener('input', function() {
     if (/[0-9]/.test(password)) strength++;
     if (/[^a-zA-Z0-9]/.test(password)) strength++;
     
-    width = (strength / 5 * 100) + '%';
-    
     if (strength <= 2) {
         text = 'Yếu';
         color = 'text-danger';
-        barColor = '#ef4444';
     } else if (strength <= 3) {
         text = 'Trung bình';
         color = 'text-warning';
-        barColor = '#f59e0b';
     } else {
         text = 'Mạnh';
         color = 'text-success';
-        barColor = '#10b981';
     }
     
     strengthDiv.innerHTML = '<i class=\"bi bi-shield me-1\"></i>Độ mạnh: <strong class=\"' + color + '\">' + text + '</strong>';
-    strengthFill.style.width = width;
-    strengthFill.style.backgroundColor = barColor;
 });
 
 // Confirm password validation

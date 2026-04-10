@@ -5,7 +5,13 @@ require_once 'includes/functions.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
-    header('Location: index.php');
+    if (isCashierAccount()) {
+        header('Location: admin/cashier-panel.php');
+    } elseif (isAdmin()) {
+        header('Location: admin/dashboard.php');
+    } else {
+        header('Location: index.php');
+    }
     exit();
 }
 
@@ -74,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $redirect = isset($_GET['redirect']) ? $_GET['redirect'] : 'index.php';
                 if ((int) $user['role_id'] === 1 || $user['role_name'] === 'admin') {
                     $redirect = 'admin/dashboard.php';
+                } elseif (getStaffPanelKey((int)$user['user_id'], (int)$user['role_id']) === 'cashier') {
+                    $redirect = 'admin/cashier-panel.php';
                 }
                 
                 header('Location: ' . $redirect);
