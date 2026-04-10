@@ -1189,8 +1189,22 @@ include 'includes/header.php';
 
 <style>
     .donate-page {
-        background: #f4fafd;
+        background: linear-gradient(-45deg, #f4fafd, #e0f2fe, #f0f9ff, #cffafe);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
         min-height: calc(100vh - 110px);
+    }
+
+    @keyframes gradientShift {
+        0% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+        100% {
+            background-position: 0% 50%;
+        }
     }
 
     .donate-hero {
@@ -1198,6 +1212,16 @@ include 'includes/header.php';
         padding: 64px 0 52px;
         position: relative;
         overflow: hidden;
+        animation: heroFloat 6s ease-in-out infinite;
+    }
+
+    @keyframes heroFloat {
+        0%, 100% {
+            transform: translateY(0px);
+        }
+        50% {
+            transform: translateY(-10px);
+        }
     }
 
     .donate-hero::before {
@@ -1273,6 +1297,16 @@ include 'includes/header.php';
         font-weight: 700;
         font-size: 0.9rem;
         white-space: nowrap;
+        animation: badgeGlow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes badgeGlow {
+        0% {
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+        }
+        100% {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.4), 0 0 25px rgba(6, 182, 212, 0.2);
+        }
     }
 
     .donate-side-panel {
@@ -1328,8 +1362,10 @@ include 'includes/header.php';
     }
 
     .item-block:hover {
-        box-shadow: 0 8px 20px rgba(6, 182, 212, 0.12);
+        box-shadow: 0 8px 20px rgba(6, 182, 212, 0.12), 0 0 20px rgba(6, 182, 212, 0.1);
         border-color: #a5f3fc !important;
+        transform: translateY(-2px);
+        transition: all 0.3s ease;
     }
 
     .item-block h5 {
