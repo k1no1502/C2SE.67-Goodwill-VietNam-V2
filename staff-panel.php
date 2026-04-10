@@ -27,6 +27,8 @@ function normalizeRoleKey($roleName) {
         'quan ly don hang' => 'orders',
         'quản lý chiến dịch' => 'campaigns',
         'quan ly chien dich' => 'campaigns',
+        'thu ngân' => 'cashier',
+        'thu ngan' => 'cashier',
         'tư vấn chăm sóc khách hàng' => 'support',
         'tu van cham soc khach hang' => 'support'
     ];

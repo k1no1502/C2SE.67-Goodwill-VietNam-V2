@@ -45,7 +45,7 @@ VALUES
 
 ('Nồi cơm điện Sharp 1.8L', 'Sharp', 'Nhà bếp', 'new', 3, 'cái', 950000,
  'picture_Database/noi-com-sharp.jpg',
- 'https://global.sharp/https://www.google.com/aclk?sa=L&ai=DChsSEwjQ1oulgs6TAxUFfw8CHblHHJgYACICCAEQCRoCdGI&co=1&ase=2&gclid=CjwKCAjwhLPOBhBiEiwA8_wJHIwz4ifN429U9mYkAf3IZhtdnITtBH5fYtj_prrInvls76wk7dr8zxoCMEAQAvD_BwE&cid=CAASugHkaNJ9PYCxK2S5g5xpEBfmSan0mIpTRFnm4cHXWGK7aIi_Bc0gBtuO60zBVhA2z3ng8Wtz5-yUSWEeXe7kvpsbFDpPaAfO7IS8iiGYtgMX_m2_rD5YAGzsdciJ3rYye1o1D_BZJoFCNr2Q-KigfwIySrn2moiDxoFgSDzw20Sog_-r7M1Ovbn_ZrLqh3hnwka-jPwYjtmYF2VzKkeDvYVe59e3-FYvRF8MOXIu19heCAoRNzv38m2nIGo&cce=2&category=acrcp_v1_32&sig=AOD64_20lxEtvfCFRHZtNWe6JtCg7WAqtQ&ctype=5&q=&nis=4&ved=2ahUKEwiqvIalgs6TAxXdklYBHcuvF5QQ5bgDKAB6BAgJEBQ&adurl=',
+ 'https://global.sharp/',
  'Nồi cơm điện dùng hằng ngày, dễ vệ sinh.'),
 
 ('Lò vi sóng Electrolux', 'Electrolux', 'Nhà bếp', 'good', 2, 'cái', 2100000,

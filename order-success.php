@@ -5,22 +5,26 @@ require_once 'includes/functions.php';
 
 requireLogin();
 
+// --- PHẦN 1: XỬ LÝ LOGIC VÀ DỮ LIỆU ---
+
 $pageTitle = "Đặt hàng thành công";
 
-$order_id = (int)($_GET['order_id'] ?? 0);
+// 1. Lấy order_id an toàn hơn
+$orderId = filter_input(INPUT_GET, 'order_id', FILTER_VALIDATE_INT) ?: 0;
+$userId = $_SESSION['user_id'] ?? 0;
 
-if ($order_id <= 0) {
+if ($orderId <= 0 || $userId <= 0) {
     header('Location: cart.php');
     exit();
 }
 
-// Get order details
+// 2. Lấy thông tin đơn hàng
 $order = Database::fetch(
     "SELECT o.*, u.name as user_name, u.email as user_email 
      FROM orders o 
      JOIN users u ON o.user_id = u.user_id 
      WHERE o.order_id = ? AND o.user_id = ?",
-    [$order_id, $_SESSION['user_id']]
+    [$orderId, $userId]
 );
 
 if (!$order) {
@@ -28,38 +32,51 @@ if (!$order) {
     exit();
 }
 
-// Compat cho cA3 hai phiA�n bA?n schema
-$shippingName = isset($order['shipping_name']) && $order['shipping_name'] !== '' ? $order['shipping_name'] : ($order['user_name'] ?? '');
-$shippingNote = $order['shipping_note'] ?? ($order['notes'] ?? '');
-$paymentMethodLabel = formatPaymentMethodLabel($order['payment_method'] ?? '');
-$isBankTransfer = strtolower((string)($order['payment_method'] ?? '')) === 'bank_transfer';
-$qrPlaceholder = 'data:image/svg+xml;base64,' . base64_encode('
-<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420">
-  <rect width="420" height="420" fill="#0f5132" rx="24" />
-  <rect x="16" y="16" width="388" height="388" fill="#f8f9fa" rx="20" />
-  <rect x="42" y="42" width="336" height="336" fill="#0f5132" rx="16" opacity="0.06"/>
-  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-        font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#0f5132">
-    QR chuyen khoan
-  </text>
-</svg>');
+// 3. Chuẩn bị dữ liệu hiển thị (Tránh logic phức tạp ở HTML)
+$orderCode = str_pad($orderId, 6, '0', STR_PAD_LEFT);
+$shippingName = !empty($order['shipping_name']) ? $order['shipping_name'] : ($order['user_name'] ?? '');
+$shippingNote = $order['shipping_note'] ?? ($order['notes'] ?? 'Không có ghi chú');
+$shippingAddress = $order['shipping_address'] ?? 'Không có địa chỉ';
+$shippingPhone = $order['shipping_phone'] ?? 'Không có số điện thoại';
 
-// Get order items
-$orderItems = Database::fetchAll(
+$paymentMethod = strtolower((string)($order['payment_method'] ?? ''));
+$isBankTransfer = $paymentMethod === 'bank_transfer';
+$paymentMethodName = $isBankTransfer ? 'Chuyển khoản ngân hàng' : 'Thanh toán khi nhận hàng (COD)';
+
+$totalAmount = (int)($order['total_amount'] ?? 0);
+$displayTotal = $totalAmount > 0 ? number_format($totalAmount) . ' VNĐ' : 'Miễn phí';
+$orderDate = date('d/m/Y H:i', strtotime($order['created_at'] ?? 'now'));
+
+// QR Code cho chuyển khoản
+$qrPlaceholder = '';
+if ($isBankTransfer) {
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420"><rect width="420" height="420" fill="#0f5132" rx="24" /><rect x="16" y="16" width="388" height="388" fill="#f8f9fa" rx="20" /><rect x="42" y="42" width="336" height="336" fill="#0f5132" rx="16" opacity="0.06"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#0f5132">QR chuyen khoan</text></svg>';
+    $qrPlaceholder = 'data:image/svg+xml;base64,' . base64_encode($svg);
+}
+
+// 4. Lấy và format danh sách sản phẩm
+$rawItems = Database::fetchAll(
     "SELECT oi.*, i.images, i.condition_status, i.unit
      FROM order_items oi
      LEFT JOIN inventory i ON oi.item_id = i.item_id
      WHERE oi.order_id = ?
      ORDER BY oi.created_at",
-    [$order_id]
+    [$orderId]
 );
+
+// Xử lý trước hình ảnh và giá cả để vòng lặp HTML gọn gàng nhất
+$orderItems = array_map(function($item) {
+    $images = json_decode($item['images'] ?? '[]', true);
+    $item['cover_image'] = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+    $item['display_price'] = $item['unit_price'] > 0 ? number_format($item['unit_price']) . ' VNĐ' : 'Miễn phí';
+    $item['display_total'] = $item['total_price'] > 0 ? number_format($item['total_price']) . ' VNĐ' : 'Miễn phí';
+    return $item;
+}, $rawItems);
 
 include 'includes/header.php';
 ?>
 
-<!-- Main Content -->
 <div class="container py-5 mt-5">
-    <!-- Success Header -->
     <div class="row justify-content-center">
         <div class="col-lg-8 text-center">
             <div class="mb-4">
@@ -72,7 +89,7 @@ include 'includes/header.php';
             </p>
             <div class="alert alert-info" role="alert">
                 <i class="bi bi-info-circle me-2"></i>
-                <strong>Mã đơn hàng:</strong> #<?php echo str_pad($order_id, 6, '0', STR_PAD_LEFT); ?>
+                <strong>Mã đơn hàng:</strong> #<?= $orderCode ?>
             </div>
         </div>
     </div>
@@ -95,8 +112,8 @@ include 'includes/header.php';
                                 <li class="mb-1"><strong>Ngân hàng:</strong> ACB (demo)</li>
                                 <li class="mb-1"><strong>Số tài khoản:</strong> 123 456 789</li>
                                 <li class="mb-1"><strong>Chủ tài khoản:</strong> Goodwill Vietnam</li>
-                                <li class="mb-1"><strong>Số tiền:</strong> <?php echo $order['total_amount'] > 0 ? number_format($order['total_amount']) . ' VNĐ' : '0 VNĐ'; ?></li>
-                                <li class="mb-1"><strong>Nội dung:</strong> DON-<?php echo str_pad($order_id, 6, '0', STR_PAD_LEFT); ?></li>
+                                <li class="mb-1"><strong>Số tiền:</strong> <?= $displayTotal ?></li>
+                                <li class="mb-1"><strong>Nội dung:</strong> DON-<?= $orderCode ?></li>
                             </ul>
                             <div class="alert alert-warning mb-0">
                                 <i class="bi bi-clock-history me-1"></i>
@@ -105,7 +122,7 @@ include 'includes/header.php';
                         </div>
                         <div class="col-md-6 text-center">
                             <div class="d-inline-block p-3 border border-success rounded-4" style="background:#f1f5f2;">
-                                <img src="<?php echo $qrPlaceholder; ?>" alt="QR chuyển khoản" class="img-fluid mb-2" style="max-width: 220px;">
+                                <img src="<?= $qrPlaceholder ?>" alt="QR chuyển khoản" class="img-fluid mb-2" style="max-width: 220px;">
                             </div>
                             <div class="text-muted small mt-2">Quét mã QR để thanh toán nhanh</div>
                         </div>
@@ -118,89 +135,65 @@ include 'includes/header.php';
 
     <div class="row justify-content-center">
         <div class="col-lg-10">
-            <!-- Order Details -->
             <div class="card mb-4">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="bi bi-receipt me-2"></i>Chi tiết đơn hàng
-                    </h5>
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Chi tiết đơn hàng</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
                             <h6 class="text-success mb-3">Thông tin giao hàng</h6>
-                            <p class="mb-1"><strong>Người nhận:</strong> <?php echo htmlspecialchars($order['shipping_name']); ?></p>
-                            <p class="mb-1"><strong>Số điện thoại:</strong> <?php echo htmlspecialchars($order['shipping_phone']); ?></p>
-                            <p class="mb-1"><strong>Địa chỉ:</strong> <?php echo htmlspecialchars($order['shipping_address']); ?></p>
-                            <?php if ($order['shipping_note']): ?>
-                                <p class="mb-1"><strong>Ghi chú:</strong> <?php echo htmlspecialchars($order['shipping_note']); ?></p>
+                            <p class="mb-1"><strong>Người nhận:</strong> <?= htmlspecialchars($shippingName) ?></p>
+                            <p class="mb-1"><strong>Số điện thoại:</strong> <?= htmlspecialchars($shippingPhone) ?></p>
+                            <p class="mb-1"><strong>Địa chỉ:</strong> <?= htmlspecialchars($shippingAddress) ?></p>
+                            <?php if ($shippingNote !== 'Không có ghi chú'): ?>
+                                <p class="mb-1"><strong>Ghi chú:</strong> <?= htmlspecialchars($shippingNote) ?></p>
                             <?php endif; ?>
                         </div>
                         <div class="col-md-6">
                             <h6 class="text-success mb-3">Thông tin thanh toán</h6>
-                            <p class="mb-1"><strong>Phương thức:</strong> 
-                                <?php 
-                                echo $order['payment_method'] === 'cod' ? 'Thanh toán khi nhận hàng (COD)' : 'Chuyển khoản ngân hàng';
-                                ?>
-                            </p>
-                            <p class="mb-1"><strong>Trạng thái:</strong> 
-                                <span class="badge bg-warning">Đang xử lý</span>
-                            </p>
-                            <p class="mb-1"><strong>Ngày đặt:</strong> <?php echo date('d/m/Y H:i', strtotime($order['created_at'])); ?></p>
-                            <p class="mb-1"><strong>Tổng tiền:</strong> 
-                                <span class="fw-bold text-success">
-                                    <?php echo $order['total_amount'] > 0 ? number_format($order['total_amount']) . ' VNĐ' : 'Miễn phí'; ?>
-                                </span>
-                            </p>
+                            <p class="mb-1"><strong>Phương thức:</strong> <?= $paymentMethodName ?></p>
+                            <p class="mb-1"><strong>Trạng thái:</strong> <span class="badge bg-warning">Đang xử lý</span></p>
+                            <p class="mb-1"><strong>Ngày đặt:</strong> <?= $orderDate ?></p>
+                            <p class="mb-1"><strong>Tổng tiền:</strong> <span class="fw-bold text-success"><?= $displayTotal ?></span></p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Order Items -->
             <div class="card mb-4">
                 <div class="card-header bg-light">
-                    <h5 class="mb-0">
-                        <i class="bi bi-box me-2"></i>Sản phẩm đã đặt (<?php echo count($orderItems); ?>)
-                    </h5>
+                    <h5 class="mb-0"><i class="bi bi-box me-2"></i>Sản phẩm đã đặt (<?= count($orderItems) ?>)</h5>
                 </div>
                 <div class="card-body p-0">
                     <?php foreach ($orderItems as $item): ?>
-                        <?php
-                        $images = json_decode($item['images'] ?? '[]', true);
-                        $firstImage = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
-                        ?>
                         <div class="border-bottom p-3">
                             <div class="row align-items-center">
                                 <div class="col-md-2 col-3">
-                                    <img src="<?php echo htmlspecialchars($firstImage); ?>" 
+                                    <img src="<?= htmlspecialchars($item['cover_image']) ?>" 
                                          class="img-fluid rounded" 
                                          style="width: 60px; height: 60px; object-fit: cover;"
-                                         alt="<?php echo htmlspecialchars($item['item_name']); ?>"
+                                         alt="<?= htmlspecialchars($item['item_name']) ?>"
                                          onerror="this.src='uploads/donations/placeholder-default.svg'">
                                 </div>
                                 <div class="col-md-4 col-9">
-                                    <h6 class="mb-1"><?php echo htmlspecialchars($item['item_name']); ?></h6>
+                                    <h6 class="mb-1"><?= htmlspecialchars($item['item_name']) ?></h6>
                                     <small class="text-muted">
-                                        Tình trạng: <?php echo ucfirst($item['condition_status'] ?? 'Mới'); ?> | 
-                                        Đơn vị: <?php echo $item['unit'] ?? 'Cái'; ?>
+                                        Tình trạng: <?= ucfirst($item['condition_status'] ?? 'Mới') ?> | 
+                                        Đơn vị: <?= $item['unit'] ?? 'Cái' ?>
                                     </small>
                                 </div>
                                 <div class="col-md-2 col-6 text-center">
                                     <small class="text-muted">Số lượng</small>
-                                    <p class="mb-0 fw-bold"><?php echo $item['quantity']; ?></p>
+                                    <p class="mb-0 fw-bold"><?= $item['quantity'] ?></p>
                                 </div>
                                 <div class="col-md-2 col-6 text-center">
                                     <small class="text-muted">Đơn giá</small>
-                                    <p class="mb-0 fw-bold">
-                                        <?php echo $item['unit_price'] > 0 ? number_format($item['unit_price']) . ' VNĐ' : 'Miễn phí'; ?>
-                                    </p>
+                                    <p class="mb-0 fw-bold"><?= $item['display_price'] ?></p>
                                 </div>
                                 <div class="col-md-2 col-12 text-center">
                                     <small class="text-muted">Thành tiền</small>
-                                    <p class="mb-0 fw-bold text-success">
-                                        <?php echo $item['total_price'] > 0 ? number_format($item['total_price']) . ' VNĐ' : 'Miễn phí'; ?>
-                                    </p>
+                                    <p class="mb-0 fw-bold text-success"><?= $item['display_total'] ?></p>
                                 </div>
                             </div>
                         </div>
@@ -208,12 +201,9 @@ include 'includes/header.php';
                 </div>
             </div>
 
-            <!-- Next Steps -->
             <div class="card mb-4">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <i class="bi bi-clock me-2"></i>Bước tiếp theo
-                    </h5>
+                    <h5 class="mb-0"><i class="bi bi-clock me-2"></i>Bước tiếp theo</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -242,33 +232,24 @@ include 'includes/header.php';
                 </div>
             </div>
 
-            <!-- Contact Info -->
             <div class="card mb-4">
                 <div class="card-body text-center">
-                    <h5 class="text-success mb-3">
-                        <i class="bi bi-headset me-2"></i>Hỗ trợ khách hàng
-                    </h5>
-                    <p class="text-muted mb-3">
-                        Nếu bạn có bất kỳ câu hỏi nào về đơn hàng, vui lòng liên hệ với chúng tôi:
-                    </p>
+                    <h5 class="text-success mb-3"><i class="bi bi-headset me-2"></i>Hỗ trợ khách hàng</h5>
+                    <p class="text-muted mb-3">Nếu bạn có bất kỳ câu hỏi nào về đơn hàng, vui lòng liên hệ với chúng tôi:</p>
                     <div class="row">
                         <div class="col-md-4 mb-2">
-                            <i class="bi bi-telephone text-primary me-2"></i>
-                            <strong>Hotline:</strong> 1900 1234
+                            <i class="bi bi-telephone text-primary me-2"></i><strong>Hotline:</strong> 1900 1234
                         </div>
                         <div class="col-md-4 mb-2">
-                            <i class="bi bi-envelope text-primary me-2"></i>
-                            <strong>Email:</strong> support@goodwillvietnam.org
+                            <i class="bi bi-envelope text-primary me-2"></i><strong>Email:</strong> support@goodwillvietnam.org
                         </div>
                         <div class="col-md-4 mb-2">
-                            <i class="bi bi-clock text-primary me-2"></i>
-                            <strong>Giờ làm việc:</strong> 8:00 - 22:00
+                            <i class="bi bi-clock text-primary me-2"></i><strong>Giờ làm việc:</strong> 8:00 - 22:00
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
             <div class="text-center">
                 <a href="my-orders.php" class="btn btn-success btn-lg me-3">
                     <i class="bi bi-list-ul me-2"></i>Xem đơn hàng của tôi

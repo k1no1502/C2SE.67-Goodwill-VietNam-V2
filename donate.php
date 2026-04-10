@@ -37,12 +37,12 @@ function getDonationPlaceholder(string $itemName, ?string $categoryName = null):
 
     $source = mb_strtolower(trim($itemName));
     $map = [
-        'áo' => ['Áo', '#dbeafe', '#243a77'],
-        'ao' => ['Áo', '#dbeafe', '#641515'],
+        'áo' => ['Áo', '#dbeafe', '#1d4ed8'],
+        'ao' => ['Áo', '#dbeafe', '#1d4ed8'],
         'quần' => ['Quần', '#fff7ed', '#c2410c'],
         'quan' => ['Quần', '#fff7ed', '#c2410c'],
-        'đồ chơi' => ['Đồ chơi', '#fef9c3', '#9ab409'],
-        'do choi' => ['Đồ chơi', '#fef9c3', '#56b409'],
+        'đồ chơi' => ['Đồ chơi', '#fef9c3', '#b45309'],
+        'do choi' => ['Đồ chơi', '#fef9c3', '#b45309'],
         'sách' => ['Sách', '#ede9fe', '#6d28d9'],
         'sach' => ['Sách', '#ede9fe', '#6d28d9'],
         'giày' => ['Giày', '#ecfccb', '#3f6212'],

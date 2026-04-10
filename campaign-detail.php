@@ -180,354 +180,53 @@ include 'includes/header.php';
 ?>
 
 <style>
-    /* ===== KEYFRAME ANIMATIONS ===== */
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(15px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes fadeInLeft {
-        from {
-            opacity: 0;
-            transform: translateX(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes fadeInRight {
-        from {
-            opacity: 0;
-            transform: translateX(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes scaleUp {
-        from {
-            opacity: 0;
-            transform: scale(0.95);
-        }
-        to {
-            opacity: 1;
-            transform: scale(1);
-        }
-    }
-
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            max-height: 0;
-        }
-        to {
-            opacity: 1;
-            max-height: 100vh;
-        }
-    }
-
-    @keyframes bounce {
-        0%, 100% {
-            transform: translateY(0);
-        }
-        50% {
-            transform: translateY(-5px);
-        }
-    }
-
-    @keyframes glow {
-        0%, 100% {
-            box-shadow: 0 12px 28px rgba(13, 64, 86, 0.08);
-        }
-        50% {
-            box-shadow: 0 16px 40px rgba(14, 116, 144, 0.15);
-        }
-    }
-
-    /* ===== MAIN PAGE & CARDS ===== */
     .campaign-detail-page {
         background: radial-gradient(circle at 10% 10%, rgba(14, 116, 144, 0.14), rgba(14, 116, 144, 0) 32%), #f8fcfe;
-        animation: fadeIn 0.6s ease-out;
     }
-
     .campaign-detail-page .card {
         border: 1px solid #d8edf3;
         border-radius: 16px;
         box-shadow: 0 12px 28px rgba(13, 64, 86, 0.08);
-        animation: fadeIn 0.6s ease-out backwards;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-
-    .campaign-detail-page .card:hover {
-        box-shadow: 0 18px 36px rgba(13, 64, 86, 0.14);
-        transform: translateY(-4px);
-    }
-
-    /* Stagger animation cho các cards */
-    .col-lg-8 .card:nth-child(1) { animation-delay: 0.1s; }
-    .col-lg-8 .card:nth-child(2) { animation-delay: 0.2s; }
-    .col-lg-8 .card:nth-child(3) { animation-delay: 0.3s; }
-    .col-lg-8 .card:nth-child(4) { animation-delay: 0.4s; }
-    .col-lg-4 .card:nth-child(1) { animation-delay: 0.25s; }
-    .col-lg-4 .card:nth-child(2) { animation-delay: 0.35s; }
-    .col-lg-4 .card:nth-child(3) { animation-delay: 0.45s; }
-
-    /* ===== BACK BUTTON ===== */
     .btn-back-modern {
         border-radius: 999px;
         border-color: #0e7490;
         color: #0e7490;
         font-weight: 600;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        animation: fadeInLeft 0.5s ease-out;
     }
-
     .btn-back-modern:hover {
         background: #0e7490;
         color: #fff;
-        transform: translateX(-3px);
-        box-shadow: 0 8px 20px rgba(14, 116, 144, 0.3);
     }
-
-    .btn-back-modern:active {
-        transform: translateX(-1px);
-    }
-
-    /* ===== OVERVIEW & METRIC CARDS ===== */
     .overview-card {
         background: linear-gradient(135deg, #ffffff 0%, #f3fbfe 100%);
     }
-
     .metric-card {
         background: #ffffff;
         border-color: #b9dbe6 !important;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        animation: fadeIn 0.5s ease-out backwards;
     }
-
-    .metric-card:hover {
-        transform: scale(1.05) translateY(-3px);
-        box-shadow: 0 14px 28px rgba(14, 116, 144, 0.18);
-        border-color: #0e7490 !important;
-    }
-
     .metric-card .fs-4 {
         color: #0e7490;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-
-    .metric-card:hover .fs-4 {
-        transform: scale(1.1) rotate(2deg);
-    }
-
-    /* ===== SECTION HEADERS ===== */
     .campaign-section-header {
         background: linear-gradient(135deg, #0e7490 0%, #155e75 100%) !important;
         color: #fff;
         border-top-left-radius: 16px;
         border-top-right-radius: 16px;
-        transition: all 0.3s ease;
     }
-
-    .campaign-section-header h5 {
-        transition: all 0.3s ease;
+    .sidebar-card .btn-primary {
+        background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+        border: none;
     }
-
-    .campaign-section-header i {
-        display: inline-block;
-        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    .sidebar-card .btn-primary:hover {
+        filter: brightness(0.95);
     }
-
-    .campaign-section-header:hover i {
-        transform: rotate(12deg) scale(1.15);
-    }
-
-    /* ===== SIDEBAR CARDS ===== */
-    .sidebar-card {
-        animation: fadeInRight 0.6s ease-out backwards;
-    }
-
-    .sidebar-card .btn-primary,
     .sidebar-card .btn-success {
         background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
         border: none;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        position: relative;
-        overflow: hidden;
     }
-
-    .sidebar-card .btn-primary:hover,
     .sidebar-card .btn-success:hover {
         filter: brightness(0.95);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(14, 116, 144, 0.3);
-    }
-
-    .sidebar-card .btn-primary:active,
-    .sidebar-card .btn-success:active {
-        transform: translateY(0);
-    }
-
-    /* ===== GENERAL BUTTONS ===== */
-    button, a.btn {
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        position: relative;
-    }
-
-    button:not([disabled]):hover, 
-    a.btn:hover {
-        transform: translateY(-2px);
-    }
-
-    .btn-warning {
-        transition: all 0.35s ease;
-    }
-
-    .btn-warning:hover:not(:disabled) {
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 10px 24px rgba(255, 193, 7, 0.35);
-    }
-
-    /* ===== IMAGES & MEDIA ===== */
-    img {
-        transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .card-img-top {
-        animation: scaleUp 0.6s ease-out;
-    }
-
-    .card-img-top:hover {
-        transform: scale(1.02);
-    }
-
-    video {
-        transition: all 0.3s ease;
-    }
-
-    video:hover {
-        filter: brightness(1.05);
-    }
-
-    /* ===== TABLES ===== */
-    table {
-        animation: fadeIn 0.5s ease-out;
-    }
-
-    table tbody tr {
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    table tbody tr:hover {
-        background-color: #f0f8fb;
-        transform: translateX(4px);
-    }
-
-    table tbody td {
-        transition: color 0.3s ease;
-    }
-
-    /* ===== BADGES ===== */
-    .badge {
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        display: inline-block;
-        transform-origin: center;
-    }
-
-    .badge:hover {
-        transform: scale(1.1) translateY(-2px);
-        filter: brightness(0.9);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    /* ===== PROGRESS BARS ===== */
-    .progress {
-        background-color: rgba(14, 116, 144, 0.1);
-        transition: all 0.3s ease;
-        overflow: hidden;
-        border-radius: 10px;
-    }
-
-    .progress-bar {
-        transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-        animation: slideDown 1s ease-out;
-        background-image: linear-gradient(
-            45deg,
-            rgba(255, 255, 255, 0.15) 25%,
-            transparent 25%,
-            transparent 50%,
-            rgba(255, 255, 255, 0.15) 50%,
-            rgba(255, 255, 255, 0.15) 75%,
-            transparent 75%,
-            transparent
-        );
-        background-size: 40px 40px;
-    }
-
-    /* ===== LINKS ===== */
-    a:not(.btn) {
-        transition: all 0.25s ease;
-    }
-
-    a:not(.btn):hover {
-        color: #0e7490 !important;
-    }
-
-    /* ===== FORM ELEMENTS ===== */
-    input, textarea, select {
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    input:focus, 
-    textarea:focus, 
-    select:focus {
-        border-color: #0e7490 !important;
-        box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.15) !important;
-        transform: scale(1.01);
-    }
-
-    /* ===== VOLUNTEER SECTION ===== */
-    .rounded-circle {
-        transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .col-md-6:has(.rounded-circle):hover .rounded-circle {
-        transform: scale(1.12) rotate(5deg);
-        box-shadow: 0 10px 20px rgba(14, 116, 144, 0.3);
-    }
-
-    /* ===== DIVIDERS ===== */
-    hr {
-        transition: all 0.3s ease;
-        opacity: 0.8;
-    }
-
-    hr:hover {
-        opacity: 0.5;
-    }
-
-    /* ===== TEXT ELEMENTS ===== */
-    h1, h2, h3, h4, h5, h6 {
-        transition: all 0.3s ease;
-    }
-
-    .fw-bold {
-        transition: all 0.3s ease;
-    }
-
-    /* ===== ALERTS ===== */
-    .alert {
-        animation: fadeIn 0.4s ease-out;
     }
 
     .join-confirm-overlay {
@@ -543,8 +242,7 @@ include 'includes/header.php';
         z-index: 2100;
         background: rgba(6, 35, 45, 0.52);
         backdrop-filter: blur(2px);
-        transition: opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-                    visibility 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transition: opacity 0.25s ease, visibility 0.25s ease;
     }
 
     .join-confirm-overlay.show {
@@ -562,8 +260,7 @@ include 'includes/header.php';
         padding: 1.4rem 1.35rem 1.1rem;
         transform: translateY(16px) scale(0.97);
         opacity: 0;
-        transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), 
-                    opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.22s ease;
     }
 
     .join-confirm-overlay.show .join-confirm-dialog {
@@ -582,18 +279,12 @@ include 'includes/header.php';
         justify-content: center;
         margin: 0 auto 0.95rem;
         box-shadow: 0 10px 22px rgba(19, 113, 136, 0.14);
-        animation: scaleUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
     }
 
     .join-confirm-icon img {
         width: 42px;
         height: 42px;
         object-fit: contain;
-        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .join-confirm-overlay.show .join-confirm-icon img {
-        animation: bounce 0.6s ease-out 0.4s;
     }
 
     .join-confirm-title {
@@ -603,17 +294,10 @@ include 'includes/header.php';
         line-height: 1.45;
         margin: 0;
         text-align: center;
-        animation: fadeIn 0.5s ease-out 0.1s backwards;
     }
 
     .join-confirm-title .campaign-name {
         color: #0a7894;
-        transition: all 0.3s ease;
-    }
-
-    .join-confirm-title .campaign-name:hover {
-        text-decoration: underline;
-        color: #0e7490;
     }
 
     .join-confirm-actions {
@@ -621,7 +305,6 @@ include 'includes/header.php';
         display: flex;
         justify-content: center;
         gap: 0.75rem;
-        animation: fadeIn 0.5s ease-out 0.2s backwards;
     }
 
     .btn-join-choice {
@@ -631,17 +314,6 @@ include 'includes/header.php';
         padding: 0.55rem 1rem;
         font-weight: 800;
         letter-spacing: 0.02em;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .btn-join-choice:hover {
-        transform: translateY(-2px);
-    }
-
-    .btn-join-choice:active {
-        transform: scale(0.98);
     }
 
     .btn-join-yes {
@@ -650,28 +322,18 @@ include 'includes/header.php';
         border: none;
     }
 
-    .btn-join-yes:hover {
-        box-shadow: 0 8px 20px rgba(15, 124, 153, 0.4);
-        transform: translateY(-3px) scale(1.02);
-    }
-
     .btn-join-no {
         background: #fff;
         color: #0f657d;
-        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
     .btn-join-no:hover {
         background: #f4fbfd;
-        border-color: #0e7490;
-        color: #0e7490;
-        transform: translateY(-2px);
     }
 
     .volunteer-register-dialog {
         max-width: 760px;
-        transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), 
-                    opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease;
     }
 
     #volunteerModal.modal.fade .volunteer-register-dialog {
@@ -689,87 +351,30 @@ include 'includes/header.php';
         border: 1px solid #d2e8f0;
         overflow: hidden;
         box-shadow: 0 22px 44px rgba(8, 57, 74, 0.24);
-        animation: fadeIn 0.4s ease-out;
     }
 
     .volunteer-register-dialog .modal-header {
         padding: 0.9rem 1.2rem;
-        background: linear-gradient(135deg, #f0f8fb 0%, #ffffff 100%);
-        transition: all 0.3s ease;
-    }
-
-    .volunteer-register-dialog .modal-header:hover {
-        background: linear-gradient(135deg, #e8f4f9 0%, #f8fcfe 100%);
-    }
-
-    .volunteer-register-dialog .modal-title {
-        transition: all 0.3s ease;
     }
 
     .volunteer-register-dialog .modal-body {
         padding: 1rem 1.2rem;
         max-height: calc(100vh - 230px);
         overflow-y: auto;
-        animation: fadeIn 0.5s ease-out 0.1s backwards;
     }
 
     .volunteer-register-dialog .modal-footer {
         padding: 0.75rem 1.2rem 0.9rem;
-        background: linear-gradient(135deg, #ffffff 0%, #f0f8fb 100%);
-        transition: all 0.3s ease;
-    }
-
-    .volunteer-register-dialog .modal-footer:hover {
-        background: linear-gradient(135deg, #f8fcfe 0%, #e8f4f9 100%);
     }
 
     .volunteer-register-dialog .form-label {
         margin-bottom: 0.35rem;
-        transition: all 0.3s ease;
-        font-weight: 500;
-    }
-
-    .volunteer-register-dialog .form-control {
-        border-radius: 8px;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .volunteer-register-dialog .form-control:focus-visible {
-        background-color: #f8fcfe;
     }
 
     .volunteer-register-dialog hr {
         margin: 0.7rem 0 0.9rem;
-        opacity: 0.5;
-        transition: opacity 0.3s ease;
     }
 
-    .volunteer-register-dialog hr:hover {
-        opacity: 0.8;
-    }
-
-    .volunteer-register-dialog .btn-close {
-        transition: all 0.3s ease;
-    }
-
-    .volunteer-register-dialog .btn-close:hover {
-        transform: rotate(90deg) scale(1.2);
-    }
-
-    /* Modal fade effect */
-    .modal.fade {
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
-
-    .modal.fade.show {
-        animation: fadeIn 0.4s ease-out;
-    }
-
-    .modal-backdrop {
-        transition: opacity 0.3s ease;
-    }
-
-    /* Responsive Adjustments */
     @media (max-width: 991.98px) {
         .volunteer-register-dialog {
             margin: 0.6rem;
@@ -785,32 +390,6 @@ include 'includes/header.php';
             padding-left: 0.9rem;
             padding-right: 0.9rem;
         }
-
-        /* Adjust card animations for mobile */
-        .col-lg-8 .card,
-        .col-lg-4 .card {
-            animation: fadeIn 0.5s ease-out backwards;
-        }
-    }
-
-    /* Custom scrollbar styling */
-    .volunteer-register-dialog .modal-body::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .volunteer-register-dialog .modal-body::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-
-    .volunteer-register-dialog .modal-body::-webkit-scrollbar-thumb {
-        background: #0e7490;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-    }
-
-    .volunteer-register-dialog .modal-body::-webkit-scrollbar-thumb:hover {
-        background: #155e75;
     }
 </style>
 
@@ -1470,72 +1049,6 @@ include 'includes/header.php';
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ===== RIPPLE EFFECT ON CLICK =====
-document.addEventListener('click', function(e) {
-    const btn = e.target.closest('button, a.btn, .btn-join-choice');
-    if (!btn) return;
-    
-    const rect = btn.getBoundingClientRect();
-    const ripple = document.createElement('span');
-    const size = Math.max(rect.width, rect.height);
-    const x = e.clientX - rect.left - size / 2;
-    const y = e.clientY - rect.top - size / 2;
-    
-    ripple.style.width = ripple.style.height = size + 'px';
-    ripple.style.left = x + 'px';
-    ripple.style.top = y + 'px';
-    ripple.classList.add('ripple');
-    btn.appendChild(ripple);
-    
-    setTimeout(() => ripple.remove(), 600);
-});
-
-// ===== RIPPLE STYLES =====
-const rippleStyle = document.createElement('style');
-rippleStyle.textContent = `
-    button, a.btn, .btn-join-choice {
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .ripple {
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.6);
-        pointer-events: none;
-        animation: rippleEffect 0.6s ease-out;
-    }
-    
-    @keyframes rippleEffect {
-        to {
-            transform: scale(4);
-            opacity: 0;
-        }
-    }
-`;
-document.head.appendChild(rippleStyle);
-
-// ===== SCROLL ANIMATIONS FOR ELEMENTS =====
-const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-};
-
-const observer = new IntersectionObserver(function(entries) {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.style.animation = 'fadeIn 0.6s ease-out forwards';
-            observer.unobserve(entry.target);
-        }
-    });
-}, observerOptions);
-
-// Observe cards and tables
-document.querySelectorAll('.metric-card, table tbody tr').forEach(el => {
-    el.style.opacity = '0';
-    observer.observe(el);
-});
-
 function showJoinConfirmPopup(campaignName) {
     const overlay = document.getElementById('joinConfirmOverlay');
     const nameEl = document.getElementById('joinConfirmCampaignName');
