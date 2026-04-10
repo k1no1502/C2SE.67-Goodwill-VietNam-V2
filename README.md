@@ -11,7 +11,7 @@
   <img alt="MySQL" src="https://img.shields.io/badge/MySQL-8.x-4479A1?logo=mysql&logoColor=white"/>
   <img alt="phpMyAdmin" src="https://img.shields.io/badge/phpMyAdmin-Database%20Admin-6C78AF?logo=phpmyadmin&logoColor=white"/>
   <img alt="Scrum" src="https://img.shields.io/badge/Scrum-Agile-0A66C2?logo=scrumalliance&logoColor=white"/>
-  <img alt="Capstone" src="https://img.shields.io/badge/Capstone%202-DTU-2EA44F?logo=graduationcap&logoColor=white"/>
+  <img alt="Capstone" src="https://img.shields.io/badge/Capstone%201-DTU-2EA44F?logo=graduationcap&logoColor=white"/>
 </p>
 
 ---

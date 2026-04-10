@@ -278,37 +278,561 @@ include 'includes/header.php';
 ?>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+    :root {
+        --checkout-ink: #15364a;
+        --checkout-muted: #648094;
+        --checkout-line: #cfe4ea;
+        --checkout-surface: #ffffff;
+        --checkout-bg: #eef7f8;
+        --checkout-brand-700: #187f98;
+        --checkout-brand-800: #12687d;
+        --checkout-brand-100: #dff3f7;
+        --checkout-brand-50: #f4fbfc;
+        --checkout-shadow: 0 18px 44px rgba(18, 104, 125, .10);
+    }
+
+    body {
+        background:
+            radial-gradient(circle at top left, rgba(24, 127, 152, .14), transparent 24%),
+            radial-gradient(circle at top right, rgba(12, 86, 102, .10), transparent 20%),
+            linear-gradient(180deg, #f7fbfc 0%, #ecf6f8 100%);
+    }
+
+    .checkout-shell {
+        padding-top: 0;
+        padding-bottom: 3rem;
+    }
+
+    .checkout-hero {
+        background:
+            radial-gradient(circle at top left, rgba(255,255,255,.10), transparent 24%),
+            linear-gradient(135deg, #1b8097 0%, #176f86 52%, #215e73 100%);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 0;
+        box-shadow: 0 24px 50px rgba(16, 93, 112, .18);
+        padding: 3.4rem 3rem 3.2rem;
+        position: relative;
+        overflow: hidden;
+        color: #fff;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+    }
+    .checkout-hero::before {
+        content: '';
+        position: absolute;
+        inset: auto auto -70px -30px;
+        width: 260px;
+        height: 260px;
+        background: radial-gradient(circle, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 72%);
+        pointer-events: none;
+    }
+    .checkout-hero::after {
+        content: '';
+        position: absolute;
+        top: -90px;
+        right: -40px;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 70%);
+        pointer-events: none;
+    }
+    .checkout-hero-inner {
+        position: relative;
+        z-index: 1;
+        max-width: 1480px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+    }
+    .checkout-hero-icon {
+        width: 110px;
+        height: 110px;
+        border-radius: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.08) 100%);
+        border: 1px solid rgba(255,255,255,.18);
+        backdrop-filter: blur(4px);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 20px 34px rgba(11, 57, 69, .18);
+        flex-shrink: 0;
+    }
+    .checkout-hero-icon i {
+        font-size: 3.4rem;
+        line-height: 1;
+        color: #fff;
+    }
+    .checkout-hero-content {
+        min-width: 0;
+    }
+    .checkout-hero h1 {
+        margin: 0;
+        font-size: clamp(2.5rem, 5vw, 4.8rem);
+        line-height: .98;
+        font-weight: 900;
+        letter-spacing: -.045em;
+        color: #fff;
+        max-width: 760px;
+    }
+    .checkout-hero p {
+        margin: 1rem 0 0;
+        font-size: clamp(1.05rem, 1.5vw, 1.28rem);
+        color: rgba(255,255,255,.9);
+        max-width: 980px;
+        line-height: 1.45;
+    }
+    .checkout-hero-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .9rem;
+        margin-top: 1.55rem;
+    }
+    .checkout-hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .65rem;
+        min-height: 56px;
+        padding: 0 1.4rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        border: 1px solid rgba(255,255,255,.28);
+        color: #fff;
+        font-weight: 800;
+        font-size: clamp(.95rem, 1.1vw, 1.05rem);
+        letter-spacing: -.01em;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+        backdrop-filter: blur(3px);
+    }
+    .checkout-hero-chip i {
+        font-size: 1.1rem;
+    }
+
+    .checkout-card,
+    .summary-card {
+        background: rgba(255,255,255,.98);
+        border: 1px solid var(--checkout-line);
+        border-radius: 24px;
+        box-shadow: var(--checkout-shadow);
+        overflow: hidden;
+        position: relative;
+    }
+    .checkout-card::before,
+    .summary-card::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--checkout-brand-700), #4db4ca);
+    }
+    .checkout-card-header,
+    .summary-card-header {
+        display: flex;
+        align-items: center;
+        gap: .8rem;
+        padding: 1rem 1.2rem;
+        border-bottom: 1px solid var(--checkout-line);
+        background: linear-gradient(180deg, #fbfeff 0%, #eff8fa 100%);
+    }
+    .checkout-card-header i,
+    .summary-card-header i {
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: linear-gradient(145deg, var(--checkout-brand-700), var(--checkout-brand-800));
+        color: #fff;
+        font-size: 1rem;
+        box-shadow: 0 10px 20px rgba(24,127,152,.18);
+    }
+    .checkout-card-header h5,
+    .summary-card-header h5 {
+        margin: 0;
+        font-weight: 800;
+        color: var(--checkout-ink);
+    }
+    .checkout-card-body,
+    .summary-card-body {
+        padding: 1.25rem;
+    }
+
+    .checkout-section-title {
+        font-size: .8rem;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--checkout-brand-700);
+        font-weight: 800;
+        margin: 0 0 .9rem;
+    }
+
+    .form-label {
+        color: var(--checkout-ink);
+        font-weight: 700;
+        font-size: .92rem;
+        margin-bottom: .45rem;
+    }
+    .form-control,
+    .form-select {
+        min-height: 48px;
+        border-radius: 14px;
+        border: 1.5px solid var(--checkout-line);
+        background: #fbfeff;
+        color: var(--checkout-ink);
+        padding: .75rem .95rem;
+        box-shadow: none;
+    }
+    textarea.form-control {
+        min-height: 110px;
+    }
+    .form-control:focus,
+    .form-select:focus {
+        border-color: var(--checkout-brand-700);
+        box-shadow: 0 0 0 4px rgba(24,127,152,.12);
+        background: #fff;
+    }
+    .form-text {
+        color: var(--checkout-muted);
+        font-size: .82rem;
+        margin-top: .45rem;
+    }
+
+    .checkout-alert {
+        border: 1px solid #f3c2c7;
+        border-radius: 16px;
+        background: #fff5f6;
+        color: #a7384a;
+        padding: .9rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .payment-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .9rem;
+    }
+    .payment-option {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: .8rem;
+        min-height: 86px;
+        padding: 1rem 1rem 1rem 3rem;
+        border-radius: 18px;
+        border: 1.5px solid var(--checkout-line);
+        background: linear-gradient(180deg, #ffffff 0%, #f7fcfd 100%);
+        cursor: pointer;
+        transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    .payment-option:hover {
+        transform: translateY(-2px);
+        border-color: rgba(24,127,152,.32);
+        box-shadow: 0 12px 24px rgba(24,127,152,.10);
+    }
+    .payment-option .form-check-input {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        margin: 0;
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: var(--checkout-brand-700);
+    }
+    .payment-option-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(145deg, var(--checkout-brand-700), var(--checkout-brand-800));
+        color: #fff;
+        font-size: 1.2rem;
+        box-shadow: 0 10px 20px rgba(24,127,152,.18);
+        flex-shrink: 0;
+    }
+    .payment-option-title {
+        color: var(--checkout-ink);
+        font-weight: 800;
+        margin: 0 0 .18rem;
+    }
+    .payment-option-sub {
+        color: var(--checkout-muted);
+        font-size: .84rem;
+        margin: 0;
+    }
+    .payment-option:has(.form-check-input:checked) {
+        border-color: var(--checkout-brand-700);
+        background: linear-gradient(180deg, #f7feff 0%, #edf9fb 100%);
+        box-shadow: 0 14px 28px rgba(24,127,152,.14);
+    }
+
+    .checkout-submit {
+        min-height: 54px;
+        border: 0;
+        border-radius: 16px;
+        background: linear-gradient(145deg, var(--checkout-brand-700), var(--checkout-brand-800));
+        color: #fff;
+        font-weight: 800;
+        letter-spacing: .01em;
+        box-shadow: 0 16px 26px rgba(24,127,152,.24);
+        transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .checkout-submit:hover,
+    .checkout-submit:focus {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 32px rgba(24,127,152,.28);
+        color: #fff;
+    }
+
+    .checkout-map-wrap {
+        margin-top: 1rem;
+        padding: .9rem;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #f7fcfd 0%, #eef8fa 100%);
+        border: 1px solid var(--checkout-line);
+    }
+    .checkout-map-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: .75rem;
+        color: var(--checkout-muted);
+        font-size: .84rem;
+    }
+    #shippingMap {
+        width: 100%;
+        height: 280px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(24,127,152,.16);
+        background: linear-gradient(180deg, #e3f3f6 0%, #f8fcfd 100%);
+    }
+
+    .summary-card {
+        position: sticky;
+        top: 100px;
+    }
+    .summary-list {
+        display: flex;
+        flex-direction: column;
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+    .summary-item {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        gap: .8rem;
+        align-items: center;
+        padding: .75rem;
+        border-radius: 18px;
+        border: 1px solid #e2eff2;
+        background: linear-gradient(180deg, #fff 0%, #f9fcfd 100%);
+    }
+    .summary-thumb {
+        width: 54px;
+        height: 54px;
+        object-fit: cover;
+        border-radius: 14px;
+        border: 1px solid rgba(24,127,152,.10);
+        background: #fff;
+    }
+    .summary-name {
+        font-size: .92rem;
+        font-weight: 700;
+        color: var(--checkout-ink);
+        margin: 0 0 .15rem;
+    }
+    .summary-meta {
+        color: var(--checkout-muted);
+        font-size: .82rem;
+    }
+    .summary-price {
+        text-align: right;
+        font-size: .86rem;
+        font-weight: 800;
+        color: var(--checkout-ink);
+        white-space: nowrap;
+    }
+    .summary-stats {
+        border-top: 1px dashed var(--checkout-line);
+        border-bottom: 1px dashed var(--checkout-line);
+        padding: .95rem 0;
+        margin: 1rem 0;
+    }
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        color: var(--checkout-muted);
+        margin-bottom: .55rem;
+        font-size: .92rem;
+    }
+    .summary-row:last-child {
+        margin-bottom: 0;
+    }
+    .summary-row strong,
+    .summary-row span:last-child {
+        color: var(--checkout-ink);
+    }
+    .summary-row.is-total {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--checkout-ink);
+        margin-top: .8rem;
+        padding-top: .8rem;
+        border-top: 1px solid var(--checkout-line);
+    }
+    .summary-row.is-total span:last-child {
+        color: var(--checkout-brand-700);
+        font-size: 1.25rem;
+        font-weight: 900;
+    }
+    .trust-box {
+        padding: 1rem 1rem 1rem 1.05rem;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #f4fbfc 0%, #ebf7f9 100%);
+        border: 1px solid var(--checkout-line);
+    }
+    .trust-box h6 {
+        color: var(--checkout-brand-700);
+        margin: 0 0 .7rem;
+        font-weight: 800;
+    }
+    .trust-list {
+        display: grid;
+        gap: .45rem;
+        color: var(--checkout-muted);
+        font-size: .84rem;
+    }
+    .trust-list span {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+    .trust-list i {
+        color: var(--checkout-brand-700);
+    }
+
+    @media (max-width: 991.98px) {
+        .checkout-shell {
+            padding-top: 0;
+        }
+        .checkout-hero {
+            padding: 2.4rem 1.4rem 2.2rem;
+        }
+        .checkout-hero-inner {
+            gap: 1.2rem;
+        }
+        .checkout-hero-icon {
+            width: 84px;
+            height: 84px;
+            border-radius: 22px;
+        }
+        .checkout-hero-icon i {
+            font-size: 2.6rem;
+        }
+        .summary-card {
+            position: static;
+            top: auto;
+            margin-top: 1rem;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .checkout-hero {
+            padding: 2rem 1rem 1.9rem;
+        }
+        .checkout-hero-inner {
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .checkout-hero-icon {
+            width: 76px;
+            height: 76px;
+            border-radius: 20px;
+        }
+        .checkout-hero-icon i {
+            font-size: 2.2rem;
+        }
+        .checkout-hero p {
+            font-size: .95rem;
+        }
+        .checkout-hero-chips {
+            gap: .7rem;
+            margin-top: 1.15rem;
+        }
+        .checkout-hero-chip {
+            min-height: 48px;
+            padding: 0 1rem;
+            font-size: .92rem;
+        }
+        .checkout-card-body,
+        .summary-card-body {
+            padding: 1rem;
+        }
+        .payment-grid {
+            grid-template-columns: 1fr;
+        }
+        .summary-item {
+            grid-template-columns: 46px minmax(0, 1fr);
+        }
+        .summary-price {
+            grid-column: 2;
+            text-align: left;
+            padding-top: .15rem;
+        }
+        #shippingMap {
+            height: 240px;
+        }
+    }
+</style>
 
 <!-- Main Content -->
-<div class="container py-5 mt-5">
+<div class="container checkout-shell">
     <!-- Page Header -->
     <div class="row mb-4">
         <div class="col-12">
-            <h1 class="display-5 fw-bold text-success mb-3">
-                <i class="bi bi-credit-card me-2"></i>Thanh toán
-            </h1>
-            <p class="lead text-muted">Hoan tat don hang của bạn</p>
+            <div class="checkout-hero">
+                <div class="checkout-hero-inner">
+                    <div class="checkout-hero-icon">
+                        <i class="bi bi-heart-fill"></i>
+                    </div>
+                    <div class="checkout-hero-content">
+                        <h1>Thanh toán cho Goodwill Vietnam</h1>
+                        <p>Hoàn tất đơn hàng nhanh chóng, minh bạch và đồng bộ với trải nghiệm hiện đại của Goodwill Vietnam.</p>
+                        <div class="checkout-hero-chips">
+                            <span class="checkout-hero-chip"><i class="bi bi-shield-check"></i>Minh bạch</span>
+                            <span class="checkout-hero-chip"><i class="bi bi-lightning-charge"></i>Xử lý nhanh</span>
+                            <span class="checkout-hero-chip"><i class="bi bi-geo-alt"></i>Hỗ trợ toàn quốc</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="row">
         <!-- Checkout Form -->
         <div class="col-lg-8">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="bi bi-person-lines-fill me-2"></i>Thông tin giao hàng
-                    </h5>
+            <div class="checkout-card">
+                <div class="checkout-card-header">
+                    <i class="bi bi-person-lines-fill"></i>
+                    <h5>Thông tin giao hàng</h5>
                 </div>
-                <div class="card-body">
+                <div class="checkout-card-body">
                     <?php if ($error): ?>
-                        <div class="alert alert-danger" role="alert">
+                        <div class="checkout-alert" role="alert">
                             <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
                         </div>
                     <?php endif; ?>
 
                     <form method="POST" class="needs-validation" novalidate>
                         <!-- Shipping Information -->
+                        <div class="checkout-section-title">Người nhận và địa chỉ</div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="shipping_name" class="form-label">Họ tên người nhận *</label>
@@ -380,6 +904,14 @@ include 'includes/header.php';
                             <div class="invalid-feedback">
                                 Vui lòng nhập địa chỉ giao hàng.
                             </div>
+
+                            <div class="checkout-map-wrap">
+                                <div class="checkout-map-head">
+                                    <span><i class="bi bi-geo-alt-fill me-1"></i>Xem trước vị trí giao hàng</span>
+                                    <span>Kéo ghim hoặc chọn từ gợi ý để định vị chính xác hơn</span>
+                                </div>
+                                <div id="shippingMap"></div>
+                            </div>
                         </div>
 
                         <div class="mb-4">
@@ -393,40 +925,40 @@ include 'includes/header.php';
 
                         <!-- Payment Method -->
                         <div class="mb-4">
-                            <label class="form-label">Phương thức thanh toán *</label>
-                            <div class="row">
-                                <div class="col-md-6 mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" 
-                                               type="radio" 
-                                               name="payment_method" 
-                                               id="cod" 
-                                               value="cod"
-                                               <?php echo ($payment_method === 'cod' || empty($payment_method)) ? 'checked' : ''; ?>>
-                                        <label class="form-check-label" for="cod">
-                                            <i class="bi bi-cash-coin me-2"></i>Thanh toán khi nhận hàng (COD)
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" 
-                                               type="radio" 
-                                               name="payment_method" 
-                                               id="bank_transfer" 
-                                               value="bank_transfer"
-                                               <?php echo $payment_method === 'bank_transfer' ? 'checked' : ''; ?>>
-                                        <label class="form-check-label" for="bank_transfer">
-                                            <i class="bi bi-bank me-2"></i>Chuyển khoản ngân hàng
-                                        </label>
-                                    </div>
-                                </div>
+                            <div class="checkout-section-title">Phương thức thanh toán</div>
+                            <div class="payment-grid">
+                                <label class="payment-option" for="cod">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="payment_method" 
+                                           id="cod" 
+                                           value="cod"
+                                           <?php echo ($payment_method === 'cod' || empty($payment_method)) ? 'checked' : ''; ?>>
+                                    <span class="payment-option-icon"><i class="bi bi-cash-coin"></i></span>
+                                    <span>
+                                        <span class="payment-option-title d-block">Thanh toán khi nhận hàng</span>
+                                        <span class="payment-option-sub d-block">Thanh toán trực tiếp cho người giao hàng khi nhận đơn.</span>
+                                    </span>
+                                </label>
+                                <label class="payment-option" for="bank_transfer">
+                                    <input class="form-check-input" 
+                                           type="radio" 
+                                           name="payment_method" 
+                                           id="bank_transfer" 
+                                           value="bank_transfer"
+                                           <?php echo $payment_method === 'bank_transfer' ? 'checked' : ''; ?>>
+                                    <span class="payment-option-icon"><i class="bi bi-bank"></i></span>
+                                    <span>
+                                        <span class="payment-option-title d-block">Chuyển khoản ngân hàng</span>
+                                        <span class="payment-option-sub d-block">Hoàn tất thanh toán online để xử lý đơn nhanh hơn.</span>
+                                    </span>
+                                </label>
                             </div>
                         </div>
 
                         <!-- Submit Button -->
                         <div class="d-grid">
-                            <button id="submitOrderBtn" type="submit" class="btn btn-success btn-lg">
+                            <button id="submitOrderBtn" type="submit" class="btn checkout-submit btn-lg">
                                 <i class="bi bi-check-circle me-2"></i>Hoan tat don hang
                             </button>
                         </div>
@@ -437,80 +969,71 @@ include 'includes/header.php';
 
         <!-- Order Summary -->
         <div class="col-lg-4">
-            <div class="card sticky-top" style="top: 100px;">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">
-                        <i class="bi bi-receipt me-2"></i>Tóm tắt đơn hàng
-                    </h5>
+            <div class="summary-card">
+                <div class="summary-card-header">
+                    <i class="bi bi-receipt"></i>
+                    <h5>Tóm tắt đơn hàng</h5>
                 </div>
-                <div class="card-body">
+                <div class="summary-card-body">
                     <!-- Order Items -->
-                    <div class="mb-3">
+                    <div class="summary-list">
                         <?php foreach ($cartItems as $item): ?>
                             <?php
                             $images = json_decode($item['images'] ?? '[]', true);
-                            $firstImage = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+                            $firstImage = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
                             $itemTotal = $item['price_type'] === 'free' ? 0 : $item['sale_price'] * $item['cart_quantity'];
                             ?>
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="summary-item">
                                 <img src="<?php echo htmlspecialchars($firstImage); ?>" 
-                                     class="rounded me-2" 
-                                     style="width: 40px; height: 40px; object-fit: cover;"
+                                     class="summary-thumb"
                                      alt="<?php echo htmlspecialchars($item['item_name']); ?>"
                                      onerror="this.src='uploads/donations/placeholder-default.svg'">
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-0 small"><?php echo htmlspecialchars(substr($item['item_name'], 0, 30)); ?></h6>
-                                    <small class="text-muted">x<?php echo $item['cart_quantity']; ?></small>
+                                <div>
+                                    <div class="summary-name"><?php echo htmlspecialchars(substr($item['item_name'], 0, 38)); ?></div>
+                                    <div class="summary-meta">x<?php echo $item['cart_quantity']; ?> • <?php echo htmlspecialchars($item['category_name'] ?? 'Sản phẩm'); ?></div>
                                 </div>
-                                <div class="text-end">
-                                    <small class="fw-bold">
-                                        <?php echo $item['price_type'] === 'free' ? 'Miễn phí' : number_format($itemTotal) . ' VNĐ'; ?>
-                                    </small>
+                                <div class="summary-price">
+                                    <?php echo $item['price_type'] === 'free' ? 'Miễn phí' : number_format($itemTotal) . ' VNĐ'; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
 
-                    <hr>
-
                     <!-- Order Totals -->
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-2">
+                    <div class="summary-stats">
+                        <div class="summary-row">
                             <span>Tổng sản phẩm:</span>
                             <strong><?php echo $totalItems; ?> sản phẩm</strong>
                         </div>
-                        <div class="d-flex justify-content-between mb-2">
+                        <div class="summary-row">
                             <span>Sản phẩm miễn phí:</span>
-                            <span class="text-success"><?php echo $freeItemsCount; ?> sản phẩm</span>
+                            <span><?php echo $freeItemsCount; ?> sản phẩm</span>
                         </div>
-                        <div class="d-flex justify-content-between mb-2">
+                        <div class="summary-row">
                             <span>Sản phẩm trả phí:</span>
-                            <span class="text-warning"><?php echo $paidItemsCount; ?> sản phẩm</span>
+                            <span><?php echo $paidItemsCount; ?> sản phẩm</span>
                         </div>
-                        <div class="d-flex justify-content-between mb-2">
+                        <div class="summary-row">
                             <span>Phí vận chuyển:</span>
-                            <span class="text-success">Miễn phí</span>
+                            <span>Miễn phí</span>
                         </div>
-                        <hr>
-                        <div class="d-flex justify-content-between">
+                        <div class="summary-row is-total">
                             <span class="fw-bold">Tổng cộng:</span>
-                            <span class="fw-bold text-success fs-5">
+                            <span>
                                 <?php echo $totalAmount > 0 ? number_format($totalAmount) . ' VNĐ' : 'Miễn phí'; ?>
                             </span>
                         </div>
                     </div>
 
                     <!-- Security Info -->
-                    <div class="p-3 bg-light rounded">
-                        <h6 class="text-success mb-2">
-                            <i class="bi bi-shield-check me-1"></i>Cam kết
-                        </h6>
-                        <small class="text-muted">
-                            • Giao hàng tận nơi miễn phí<br>
-                            • Kiểm tra hàng trước khi thanh toán<br>
-                            • Hỗ trợ đổi trả trong 7 ngày<br>
-                            • Bảo mật thông tin khách hàng
-                        </small>
+                    <div class="trust-box">
+                        <h6><i class="bi bi-shield-check me-1"></i>Cam kết</h6>
+                        <div class="trust-list">
+                            <span><i class="bi bi-check2-circle"></i>Giao hàng tận nơi miễn phí</span>
+                            <span><i class="bi bi-check2-circle"></i>Kiểm tra hàng trước khi thanh toán</span>
+                            <span><i class="bi bi-check2-circle"></i>Hỗ trợ đổi trả trong 7 ngày</span>
+                            <span><i class="bi bi-check2-circle"></i>Bảo mật thông tin khách hàng</span>
+                        </div>
                     </div>
                 </div>
             </div>
