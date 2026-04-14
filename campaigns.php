@@ -358,27 +358,6 @@ include 'includes/header.php';
                                 <a href="campaign-detail.php?id=<?php echo $campaign['campaign_id']; ?>" class="btn btn-campaign-outline">
                                     <i class="bi bi-eye me-1"></i>Xem chi tiết
                                 </a>
-
-                                <?php if (isLoggedIn()): ?>
-                                    <div class="btn-group" role="group">
-                                        <a href="donate-to-campaign.php?campaign_id=<?php echo $campaign['campaign_id']; ?>" class="btn btn-main-gradient btn-sm">
-                                            <i class="bi bi-heart me-1"></i>Quyên góp
-                                        </a>
-                                        <?php if (!empty($campaign['registered_by_me'])): ?>
-                                            <button type="button" class="btn btn-main-gradient btn-sm" disabled>
-                                                <i class="bi bi-person-check me-1"></i>Đã tham gia
-                                            </button>
-                                        <?php else: ?>
-                                            <button type="button" class="btn btn-campaign-outline btn-sm register-volunteer" data-campaign-id="<?php echo $campaign['campaign_id']; ?>">
-                                                <i class="bi bi-person-plus me-1"></i>Tình nguyện
-                                            </button>
-                                        <?php endif; ?>
-                                    </div>
-                                <?php else: ?>
-                                    <a href="login.php" class="btn btn-main-gradient btn-sm">
-                                        <i class="bi bi-lock me-1"></i>Đăng nhập để tham gia
-                                    </a>
-                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -388,55 +367,5 @@ include 'includes/header.php';
     <?php endif; ?>
 </div>
 </div>
-
-<script>
-// Register as volunteer
-document.addEventListener('DOMContentLoaded', function() {
-    const volunteerButtons = document.querySelectorAll('.register-volunteer');
-    
-            volunteerButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const campaignId = this.dataset.campaignId;
-            const btn = this;
-            if (!campaignId) return alert('ID chiến dịch không hợp lệ.');
-
-            if (!confirm('Bạn có chắc chắn muốn đăng ký làm tình nguyện viên cho chiến dịch này?')) return;
-
-            // Disable button while processing
-            btn.disabled = true;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Đang xử lý...';
-
-            const body = new URLSearchParams();
-            body.append('campaign_id', campaignId);
-
-            fetch('api/register-volunteer-detail.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: body.toString()
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.success) {
-                    alert(data.message || 'Đã đăng ký làm tình nguyện viên thành công!');
-                    location.reload();
-                } else {
-                    alert('Lỗi: ' + (data && data.message ? data.message : 'Không thể đăng ký'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Có lỗi xảy ra khi đăng ký');
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            });
-        });
-    });
-});
-</script>
 
 <?php include 'includes/footer.php'; ?>

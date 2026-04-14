@@ -44,6 +44,27 @@ $stats = [
     'rejected' => Database::fetch("SELECT COUNT(*) as count FROM donations WHERE user_id = ? AND status = 'rejected'", [$_SESSION['user_id']])['count']
 ];
 
+// Money donation history (in transactions)
+$moneyPage = max(1, (int)($_GET['money_page'] ?? 1));
+$moneyPerPage = 10;
+$moneyOffset = ($moneyPage - 1) * $moneyPerPage;
+
+$moneyWhere = "t.user_id = ? AND t.type = 'donation' AND t.amount > 0";
+$moneyParams = [$_SESSION['user_id']];
+
+$moneyCountSql = "SELECT COUNT(*) AS count FROM transactions t WHERE $moneyWhere";
+$totalMoneyDonations = (int)(Database::fetch($moneyCountSql, $moneyParams)['count'] ?? 0);
+$totalMoneyPages = max(1, (int)ceil($totalMoneyDonations / $moneyPerPage));
+
+$moneyLimit = (int)$moneyPerPage;
+$moneyOffset = (int)$moneyOffset;
+$moneySql = "SELECT t.trans_id, t.amount, t.status, t.payment_method, t.payment_reference, t.notes, t.created_at
+             FROM transactions t
+             WHERE $moneyWhere
+             ORDER BY t.created_at DESC
+             LIMIT $moneyLimit OFFSET $moneyOffset";
+$moneyDonations = Database::fetchAll($moneySql, $moneyParams);
+
 $pageTitle = "Quyên góp của tôi";
 include 'includes/header.php';
 ?>
@@ -290,6 +311,86 @@ include 'includes/header.php';
                     </div>
                 </div>
             <?php endif; ?>
+
+            <!-- Money Donation History -->
+            <div class="card shadow-sm mt-4" id="money-history">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cash-coin text-success me-2"></i>Lịch sử quyên góp tiền
+                    </h5>
+                    <span class="badge bg-success"><?php echo (int)$totalMoneyDonations; ?> giao dịch</span>
+                </div>
+                <div class="card-body">
+                    <?php if (empty($moneyDonations)): ?>
+                        <div class="text-center py-4">
+                            <i class="bi bi-wallet2 text-muted" style="font-size: 2rem;"></i>
+                            <p class="text-muted mt-2 mb-0">Bạn chưa có giao dịch quyên góp tiền nào.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Mã GD</th>
+                                        <th>Số tiền</th>
+                                        <th>Phương thức</th>
+                                        <th>Trạng thái</th>
+                                        <th>Tham chiếu</th>
+                                        <th>Ngày tạo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $moneyStatusMap = [
+                                        'pending' => ['class' => 'warning', 'text' => 'Chờ xử lý'],
+                                        'completed' => ['class' => 'success', 'text' => 'Thành công'],
+                                        'cancelled' => ['class' => 'danger', 'text' => 'Thất bại'],
+                                        'refunded' => ['class' => 'secondary', 'text' => 'Hoàn tiền']
+                                    ];
+                                    $methodMap = [
+                                        'momo' => 'MoMo',
+                                        'zalopay' => 'ZaloPay',
+                                        'bank_transfer' => 'Chuyển khoản',
+                                        'cash' => 'Tiền mặt',
+                                        'credit_card' => 'Thẻ',
+                                        'free' => 'Miễn phí'
+                                    ];
+                                    ?>
+                                    <?php foreach ($moneyDonations as $tx): ?>
+                                        <?php $txStatus = $moneyStatusMap[$tx['status']] ?? ['class' => 'secondary', 'text' => 'Không xác định']; ?>
+                                        <tr>
+                                            <td>#<?php echo (int)$tx['trans_id']; ?></td>
+                                            <td class="fw-bold text-success"><?php echo formatCurrency((float)$tx['amount']); ?></td>
+                                            <td><?php echo htmlspecialchars($methodMap[$tx['payment_method']] ?? strtoupper((string)$tx['payment_method'])); ?></td>
+                                            <td>
+                                                <span class="badge bg-<?php echo $txStatus['class']; ?>">
+                                                    <?php echo $txStatus['text']; ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars((string)($tx['payment_reference'] ?: '-')); ?></td>
+                                            <td><?php echo formatDate($tx['created_at'], 'd/m/Y H:i'); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <?php if ($totalMoneyPages > 1): ?>
+                            <nav class="mt-3">
+                                <ul class="pagination justify-content-center">
+                                    <?php for ($i = 1; $i <= $totalMoneyPages; $i++): ?>
+                                        <li class="page-item <?php echo $i == $moneyPage ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?<?php echo http_build_query(array_merge($_GET, ['money_page' => $i])); ?>#money-history">
+                                                <?php echo $i; ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                </ul>
+                            </nav>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>

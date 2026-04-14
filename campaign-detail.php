@@ -99,6 +99,12 @@ $completionPercentage = $totalItemsNeeded > 0
     ? min(100, round(($totalItemsReceived / $totalItemsNeeded) * 100)) 
     : 0;
 
+$targetAmount = (float)($campaign['target_amount'] ?? 0);
+$currentAmount = (float)($campaign['current_amount'] ?? 0);
+$moneyProgressPercentage = $targetAmount > 0
+    ? min(100, round(($currentAmount / $targetAmount) * 100))
+    : 0;
+
 // Status text mapping
 $statusMap = [
     'draft' => ['class' => 'secondary', 'text' => 'Nháp'],
@@ -197,6 +203,98 @@ include 'includes/header.php';
     .btn-back-modern:hover {
         background: #0e7490;
         color: #fff;
+    }
+    .campaign-detail-hero-wrap {
+        margin-top: -1px;
+        background: linear-gradient(135deg, #0e6f8b 0%, #176f89 100%);
+        position: relative;
+        overflow: hidden;
+    }
+    .campaign-detail-hero-wrap::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 38%);
+        pointer-events: none;
+    }
+    .campaign-detail-hero-inner {
+        position: relative;
+        z-index: 1;
+        padding-top: 0.55rem;
+        padding-bottom: 2rem;
+    }
+    .campaign-detail-hero-row {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+    .campaign-detail-hero {
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+    .campaign-detail-hero-copy {
+        min-width: 0;
+    }
+    .campaign-detail-hero-icon {
+        width: 114px;
+        height: 114px;
+        border-radius: 24px;
+        border: 1px solid rgba(199, 237, 247, 0.34);
+        background: rgba(255, 255, 255, 0.14);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        backdrop-filter: blur(6px);
+    }
+    .campaign-detail-hero-icon i {
+        font-size: 3.35rem;
+        line-height: 1;
+    }
+    .campaign-detail-hero .btn-back-modern {
+        border-color: rgba(255, 255, 255, 0.56);
+        color: #fff;
+        background: rgba(255, 255, 255, 0.12);
+        margin-bottom: 1rem;
+        font-weight: 700;
+    }
+    .campaign-detail-hero .btn-back-modern:hover {
+        background: rgba(255, 255, 255, 0.22);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.7);
+    }
+    .campaign-detail-hero h1 {
+        margin: 0;
+        font-size: clamp(2.1rem, 4.7vw, 4.2rem);
+        font-weight: 900;
+        letter-spacing: 0.01em;
+        line-height: 1.05;
+    }
+    .campaign-detail-hero p {
+        margin: 0.45rem 0 0;
+        font-size: clamp(1rem, 2vw, 1.22rem);
+        color: rgba(226, 246, 252, 0.96);
+        font-weight: 500;
+    }
+    .campaign-detail-hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+        margin-top: 1rem;
+    }
+    .campaign-detail-hero-badge {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 999px;
+        padding: 0.46rem 0.95rem;
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.9rem;
+        white-space: nowrap;
     }
     .overview-card {
         background: linear-gradient(135deg, #ffffff 0%, #f3fbfe 100%);
@@ -332,7 +430,9 @@ include 'includes/header.php';
     }
 
     .volunteer-register-dialog {
-        max-width: 760px;
+        width: min(920px, calc(100vw - 1.75rem));
+        max-width: min(920px, calc(100vw - 1.75rem));
+        margin: 0.8rem auto;
         transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease;
     }
 
@@ -351,24 +451,55 @@ include 'includes/header.php';
         border: 1px solid #d2e8f0;
         overflow: hidden;
         box-shadow: 0 22px 44px rgba(8, 57, 74, 0.24);
+        max-height: calc(100vh - 1.6rem);
     }
 
     .volunteer-register-dialog .modal-header {
         padding: 0.9rem 1.2rem;
+        background: linear-gradient(135deg, #f5fcff 0%, #edf8fb 100%);
+        border-bottom: 1px solid #d5eaf1;
     }
 
     .volunteer-register-dialog .modal-body {
         padding: 1rem 1.2rem;
-        max-height: calc(100vh - 230px);
+        max-height: calc(100vh - 210px);
         overflow-y: auto;
     }
 
     .volunteer-register-dialog .modal-footer {
         padding: 0.75rem 1.2rem 0.9rem;
+        border-top: 1px solid #d5eaf1;
+        background: #f3fbfe;
     }
 
     .volunteer-register-dialog .form-label {
         margin-bottom: 0.35rem;
+        color: #124f62;
+        font-weight: 700;
+    }
+
+    .volunteer-register-dialog .form-control,
+    .volunteer-register-dialog .form-select {
+        border-color: #b8e1ec;
+    }
+
+    .volunteer-register-dialog .form-control:focus,
+    .volunteer-register-dialog .form-select:focus {
+        border-color: #0e7490;
+        box-shadow: 0 0 0 0.18rem rgba(14, 116, 144, 0.16);
+    }
+
+    .volunteer-register-dialog .btn-secondary {
+        border-radius: 999px;
+        padding-left: 1.6rem;
+        padding-right: 1.6rem;
+    }
+
+    .volunteer-register-dialog .btn-warning {
+        border-radius: 999px;
+        padding-left: 1.6rem;
+        padding-right: 1.6rem;
+        font-weight: 700;
     }
 
     .volunteer-register-dialog hr {
@@ -377,11 +508,13 @@ include 'includes/header.php';
 
     @media (max-width: 991.98px) {
         .volunteer-register-dialog {
-            margin: 0.6rem;
+            width: calc(100vw - 1rem);
+            max-width: calc(100vw - 1rem);
+            margin: 0.45rem auto;
         }
 
         .volunteer-register-dialog .modal-body {
-            max-height: calc(100vh - 170px);
+            max-height: calc(100vh - 168px);
             padding: 0.85rem 0.9rem;
         }
 
@@ -391,14 +524,86 @@ include 'includes/header.php';
             padding-right: 0.9rem;
         }
     }
+
+    @media (max-width: 575.98px) {
+        .campaign-detail-hero-wrap {
+            margin-top: -1px;
+        }
+
+        .campaign-detail-hero-inner {
+            padding-top: 0.4rem;
+            padding-bottom: 1.35rem;
+        }
+
+        .campaign-detail-hero-row,
+        .campaign-detail-hero {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.95rem;
+        }
+
+        .campaign-detail-hero .btn-back-modern {
+            margin-bottom: 0.2rem;
+        }
+
+        .campaign-detail-hero-icon {
+            width: 88px;
+            height: 88px;
+            border-radius: 18px;
+        }
+
+        .campaign-detail-hero-icon i {
+            font-size: 2.6rem;
+        }
+
+        .campaign-detail-hero-badge {
+            font-size: 0.82rem;
+            padding: 0.4rem 0.78rem;
+        }
+
+        .volunteer-register-dialog {
+            width: 100vw;
+            max-width: 100vw;
+            margin: 0;
+        }
+
+        .volunteer-register-dialog .modal-content {
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            max-height: 100vh;
+        }
+    }
 </style>
 
+<div class="campaign-detail-hero-wrap">
+    <div class="container campaign-detail-hero-inner">
+        <div class="campaign-detail-hero">
+            <div class="campaign-detail-hero-copy">
+                <a href="campaigns.php" class="btn btn-outline-secondary btn-back-modern">
+                    <i class="bi bi-arrow-left me-1"></i>Quay lại danh sách
+                </a>
+                <div class="campaign-detail-hero-row">
+                    <span class="campaign-detail-hero-icon" aria-hidden="true">
+                        <i class="bi bi-megaphone"></i>
+                    </span>
+                    <div class="campaign-detail-hero-copy">
+                        <h1>Chi tiết chiến dịch</h1>
+                        <p><?php echo htmlspecialchars($campaign['name'] ?? 'Thông tin chiến dịch thiện nguyện'); ?></p>
+                        <div class="campaign-detail-hero-badges">
+                            <span class="campaign-detail-hero-badge"><i class="bi bi-bullseye me-2"></i>Mục tiêu rõ ràng</span>
+                            <span class="campaign-detail-hero-badge"><i class="bi bi-people me-2"></i>Chung tay cộng đồng</span>
+                            <span class="campaign-detail-hero-badge"><i class="bi bi-graph-up-arrow me-2"></i>Theo dõi tiến độ</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Campaign Detail -->
-<div class="container py-5 mt-5 campaign-detail-page">
-    <!-- Back button -->
-    <a href="campaigns.php" class="btn btn-outline-secondary mb-3 btn-back-modern">
-        <i class="bi bi-arrow-left me-1"></i>Quay lại danh sách
-    </a>
+<div class="container py-4 campaign-detail-page">
 
     <div class="row">
         <!-- Main Content -->
@@ -469,12 +674,26 @@ include 'includes/header.php';
                         </div>
                     </div>
 
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-semibold">Tiền quyên góp</div>
+                            <div class="text-muted small"><?php echo number_format($currentAmount, 0, ',', '.'); ?> / <?php echo number_format($targetAmount, 0, ',', '.'); ?> VND</div>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-warning" style="width: <?php echo $moneyProgressPercentage; ?>%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted small mt-2">
+                            <span>Đã quyên góp: <?php echo number_format($currentAmount, 0, ',', '.'); ?> VND</span>
+                            <span><?php echo $moneyProgressPercentage; ?>%</span>
+                        </div>
+                    </div>
+
                     <?php if (isLoggedIn()): ?>
                         <div class="d-flex flex-wrap gap-2 mt-4">
                             <?php if (!$isVolunteer && ($campaign['status'] ?? '') === 'active'): ?>
-                                <button type="button" class="btn btn-warning" onclick="openVolunteerConfirm()">
+                                <a href="campaign-volunteer-register.php?campaign_id=<?php echo $campaign_id; ?>" class="btn btn-warning">
                                     <i class="bi bi-person-plus me-1"></i>Tham gia chiến dịch
-                                </button>
+                                </a>
                             <?php elseif ($isVolunteer): ?>
                                 <button class="btn btn-outline-success" disabled>
                                     <i class="bi bi-person-check me-1"></i>Bạn đã tham gia
@@ -880,6 +1099,22 @@ include 'includes/header.php';
                             <small class="text-muted">Mục tiêu</small>
                         </div>
                     </div>
+
+                    <hr class="my-3">
+
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Tiền đã quyên góp</span>
+                            <strong><?php echo $moneyProgressPercentage; ?>%</strong>
+                        </div>
+                        <div class="progress" style="height: 12px;">
+                            <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo $moneyProgressPercentage; ?>%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted small mt-2">
+                            <span><?php echo number_format($currentAmount, 0, ',', '.'); ?> VND</span>
+                            <span>Mục tiêu <?php echo number_format($targetAmount, 0, ',', '.'); ?> VND</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -913,11 +1148,10 @@ include 'includes/header.php';
                                     <i class="bi bi-check-circle me-2"></i>Đã đăng ký tình nguyện
                                 </button>
                             <?php else: ?>
-                                <button type="button" 
-                                        class="btn btn-warning" 
-                                        onclick="openVolunteerConfirm()">
+                                <a href="campaign-volunteer-register.php?campaign_id=<?php echo $campaign_id; ?>"
+                                   class="btn btn-warning">
                                     <i class="bi bi-person-plus me-2"></i>Đăng ký tình nguyện viên
-                                </button>
+                                </a>
                             <?php endif; ?>
                             
                             <!-- Share -->
@@ -964,7 +1198,7 @@ include 'includes/header.php';
 
 <!-- Volunteer Modal -->
 <div class="modal fade" id="volunteerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable modal-lg volunteer-register-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-lg-down volunteer-register-dialog">
         <div class="modal-content">
             <form id="volunteerForm">
                 <div class="modal-header">
@@ -980,17 +1214,17 @@ include 'includes/header.php';
                             <input type="text" class="form-control" name="full_name" required>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-lg-6">
                             <label class="form-label">Ngày sinh</label>
                             <input type="date" class="form-control" name="date_of_birth" id="volunteerDob" required>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-lg-6">
                             <label class="form-label">Tuổi</label>
                             <input type="number" class="form-control" name="age" id="volunteerAge" min="1" max="120" required>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-lg-6">
                             <label class="form-label">Giới tính</label>
                             <select class="form-select" name="gender" required>
                                 <option value="">-- Chọn giới tính --</option>
@@ -999,12 +1233,12 @@ include 'includes/header.php';
                             </select>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-lg-6">
                             <label class="form-label">Email</label>
                             <input type="email" class="form-control" name="email" required>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-lg-6">
                             <label class="form-label">SĐT</label>
                             <input type="tel" class="form-control" name="phone" required>
                         </div>

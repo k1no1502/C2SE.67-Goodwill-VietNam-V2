@@ -70,24 +70,229 @@ $success = '';
 $error = '';
 $paymentSuccess = '';
 $paymentError = '';
-$bankTransferPendingId = null;
-
 $paymentConfig = [];
-$bankDetails = [];
 $paymentConfigPath = __DIR__ . '/config/payment.php';
 if (file_exists($paymentConfigPath)) {
     $paymentConfig = require $paymentConfigPath;
-    $bankDetails = $paymentConfig['bank_transfer'] ?? [];
 }
 
-// Display return messages after sandbox payment simulation
+/**
+ * Build base URL from current request context.
+ */
+function getBaseUrl(): string
+{
+    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $scheme = $isHttps ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host;
+}
+
+/**
+ * Redirect to a dedicated failed-payment page.
+ */
+function redirectToFailedPaymentPage(string $message = ''): void
+{
+    $query = [];
+    if ($message !== '') {
+        $query['message'] = $message;
+    }
+
+    $target = 'payment-failed.php';
+    if (!empty($query)) {
+        $target .= '?' . http_build_query($query);
+    }
+
+    header('Location: ' . $target);
+    exit;
+}
+
+/**
+ * Redirect to a dedicated success-payment page.
+ */
+function redirectToSuccessPaymentPage(string $message = '', string $method = '', int $transId = 0): void
+{
+    $query = [];
+    if ($message !== '') {
+        $query['message'] = $message;
+    }
+    if ($method !== '') {
+        $query['method'] = $method;
+    }
+    if ($transId > 0) {
+        $query['trans_id'] = $transId;
+    }
+
+    $target = 'payment-success.php';
+    if (!empty($query)) {
+        $target .= '?' . http_build_query($query);
+    }
+
+    header('Location: ' . $target);
+    exit;
+}
+
+/**
+ * Send JSON payload to a gateway endpoint and decode JSON response.
+ */
+function postJson(string $url, array $payload): array
+{
+    $ch = curl_init($url);
+    if ($ch === false) {
+        throw new RuntimeException('Không thể khởi tạo kết nối thanh toán.');
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException('Lỗi kết nối cổng thanh toán: ' . $curlError);
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Phản hồi từ cổng thanh toán không hợp lệ.');
+    }
+
+    if ($httpCode >= 400) {
+        $gatewayMessage = trim((string)($decoded['message'] ?? ''));
+        throw new RuntimeException('Cổng thanh toán trả về lỗi HTTP ' . $httpCode . ($gatewayMessage !== '' ? (': ' . $gatewayMessage) : ''));
+    }
+
+    return $decoded;
+}
+
+/**
+ * Build signature for MoMo create API (AIO v2).
+ */
+function buildMomoCreateSignature(array $momo, string $amount, string $extraData, string $ipnUrl, string $orderId, string $orderInfo, string $redirectUrl, string $requestId, string $requestType): string
+{
+    $rawHash = 'accessKey=' . $momo['access_key']
+        . '&amount=' . $amount
+        . '&extraData=' . $extraData
+        . '&ipnUrl=' . $ipnUrl
+        . '&orderId=' . $orderId
+        . '&orderInfo=' . $orderInfo
+        . '&partnerCode=' . $momo['partner_code']
+        . '&redirectUrl=' . $redirectUrl
+        . '&requestId=' . $requestId
+        . '&requestType=' . $requestType;
+
+    return hash_hmac('sha256', $rawHash, $momo['secret_key']);
+}
+
+/**
+ * Extract internal transaction id from MoMo orderId/extraData.
+ */
+function extractTransIdFromMomoData(?string $orderId, ?string $extraData): int
+{
+    $orderId = (string)$orderId;
+    if (preg_match('/^DONATE(\d+)_/i', $orderId, $m)) {
+        return (int)$m[1];
+    }
+
+    $extraData = trim((string)$extraData);
+    if ($extraData !== '') {
+        $decoded = base64_decode($extraData, true);
+        if ($decoded !== false) {
+            $arr = json_decode($decoded, true);
+            if (is_array($arr) && !empty($arr['trans_id'])) {
+                return (int)$arr['trans_id'];
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * Verify MoMo return/IPN signature.
+ */
+function verifyMomoResponseSignature(array $payload, string $secretKey): bool
+{
+    $required = ['amount', 'extraData', 'message', 'orderId', 'orderInfo', 'orderType', 'partnerCode', 'payType', 'requestId', 'responseTime', 'resultCode', 'transId', 'signature'];
+    foreach ($required as $key) {
+        if (!array_key_exists($key, $payload)) {
+            return false;
+        }
+    }
+
+    $rawHash = 'accessKey=' . $payload['accessKey']
+        . '&amount=' . $payload['amount']
+        . '&extraData=' . $payload['extraData']
+        . '&message=' . $payload['message']
+        . '&orderId=' . $payload['orderId']
+        . '&orderInfo=' . $payload['orderInfo']
+        . '&orderType=' . $payload['orderType']
+        . '&partnerCode=' . $payload['partnerCode']
+        . '&payType=' . $payload['payType']
+        . '&requestId=' . $payload['requestId']
+        . '&responseTime=' . $payload['responseTime']
+        . '&resultCode=' . $payload['resultCode']
+        . '&transId=' . $payload['transId'];
+
+    $partnerSignature = hash_hmac('sha256', $rawHash, $secretKey);
+    return hash_equals($partnerSignature, (string)$payload['signature']);
+}
+
+// Display return messages after payment redirect
 if (!empty($_GET['payment_success'])) {
     $method = strtoupper(trim($_GET['method'] ?? ''));
-    $paymentSuccess = 'Thanh toán ' . ($method ? $method . ' ' : '') . 'thành công. Cảm ơn bạn đã hỗ trợ!';
+    $message = 'Thanh toán ' . ($method ? $method . ' ' : '') . 'thành công. Cảm ơn bạn đã hỗ trợ!';
+    redirectToSuccessPaymentPage($message, strtolower($method));
 }
 if (!empty($_GET['payment_error'])) {
-    $method = strtoupper(trim($_GET['method'] ?? ''));
-    $paymentError = 'Thanh toán ' . ($method ? $method . ' ' : '') . 'không thành công. Vui lòng thử lại.';
+    $method = strtoupper(trim((string)($_GET['method'] ?? '')));
+    $message = 'Thanh toán ' . ($method ? $method . ' ' : '') . 'không thành công. Vui lòng thử lại.';
+    redirectToFailedPaymentPage($message);
+}
+
+// Handle MoMo return URL result
+if (!empty($_GET['orderId']) && isset($_GET['resultCode']) && !empty($_GET['signature'])) {
+    $momoCfg = $paymentConfig['momo'] ?? [];
+    $secretKey = trim((string)($momoCfg['secret_key'] ?? ''));
+    $resultCode = (string)($_GET['resultCode'] ?? '');
+
+    // MoMo redirect URL không gửi kèm accessKey → dùng accessKey từ config
+    $getParams = $_GET;
+    if (empty($getParams['accessKey'])) {
+        $getParams['accessKey'] = trim((string)($momoCfg['access_key'] ?? ''));
+    }
+
+    if ($secretKey === '') {
+        redirectToFailedPaymentPage('Thiếu cấu hình MoMo secret_key. Vui lòng kiểm tra file config/payment.php.');
+    } elseif (!verifyMomoResponseSignature($getParams, $secretKey)) {
+        redirectToFailedPaymentPage('Xác thực chữ ký MoMo thất bại.');
+    } else {
+        $transId = extractTransIdFromMomoData((string)($_GET['orderId'] ?? ''), (string)($_GET['extraData'] ?? ''));
+        if ($transId > 0) {
+            $tx = Database::fetch('SELECT trans_id, status, user_id FROM transactions WHERE trans_id = ?', [$transId]);
+            if ($tx && (int)$tx['user_id'] === (int)$_SESSION['user_id']) {
+                if ($resultCode === '0') {
+                    Database::execute(
+                        'UPDATE transactions SET status = ?, payment_reference = ?, updated_at = NOW() WHERE trans_id = ?',
+                        ['completed', 'MOMO-' . trim((string)($_GET['transId'] ?? ($_GET['orderId'] ?? ''))), $transId]
+                    );
+                    redirectToSuccessPaymentPage('Thanh toán MoMo thành công! Cảm ơn bạn đã quyên góp cho GoodWill Việt Nam.', 'momo', $transId);
+                } else {
+                    Database::execute('UPDATE transactions SET status = ?, updated_at = NOW() WHERE trans_id = ? AND status = ?', ['cancelled', $transId, 'pending']);
+                    $message = 'Thanh toán MOMO không thành công: ' . trim((string)($_GET['message'] ?? 'Vui lòng thử lại.'));
+                    redirectToFailedPaymentPage($message);
+                }
+            }
+        } else {
+            redirectToFailedPaymentPage('Không xác định được giao dịch thanh toán.');
+        }
+    }
 }
 
 /**
@@ -607,48 +812,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['donation_excel']) &&
     }
 }
 
-// 1.5) Xử lý quyên góp tiền (ZaloPay/Momo/Chuyển khoản)
+// 1.5) Xử lý quyên góp tiền (ZaloPay/MoMo)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (trim($_POST['action'] ?? '') === 'money_donation')) {
     $amount = (float)($_POST['donate_amount'] ?? 0);
     $message = sanitize($_POST['donate_message'] ?? '');
     $method = strtolower(trim($_POST['payment_method'] ?? ''));
-    $allowedMethods = ['momo', 'zalopay', 'bank_transfer'];
+    $allowedMethods = ['momo', 'zalopay'];
 
     if ($amount < 1000) {
         $paymentError = 'Vui lòng nhập số tiền hợp lệ (tối thiểu 1.000 VND).';
     } elseif (!in_array($method, $allowedMethods, true)) {
         $paymentError = 'Vui lòng chọn phương thức thanh toán.';
     } else {
-        $transId = createMoneyDonationTransaction($_SESSION['user_id'], $amount, $method, $message);
-        if ($method === 'bank_transfer') {
-            $bankTransferPendingId = $transId;
-            $paymentSuccess = 'Yêu cầu chuyển khoản đã được tạo. Vui lòng thực hiện chuyển khoản theo thông tin bên dưới và bấm "Tôi đã chuyển khoản" khi hoàn thành.';
-        } else {
-            header('Location: sandbox_payment.php?method=' . urlencode($method) . '&trans_id=' . $transId);
-            exit;
+        try {
+            $transId = createMoneyDonationTransaction($_SESSION['user_id'], $amount, $method, $message);
+
+            if ($method === 'momo') {
+                $momoCfg = $paymentConfig['momo'] ?? [];
+                $requiredFields = ['partner_code', 'access_key', 'secret_key', 'endpoint'];
+                foreach ($requiredFields as $field) {
+                    if (trim((string)($momoCfg[$field] ?? '')) === '') {
+                        throw new RuntimeException('Thiếu cấu hình MoMo: ' . $field . '. Vui lòng cập nhật file config/payment.php.');
+                    }
+                }
+
+                $orderId = 'DONATE' . $transId . '_' . time();
+                $requestId = $orderId;
+                $requestType = trim((string)($momoCfg['request_type'] ?? 'captureWallet'));
+                $redirectUrl = trim((string)($momoCfg['return_url'] ?? ''));
+                $ipnUrl = trim((string)($momoCfg['notify_url'] ?? ''));
+
+                if ($redirectUrl === '') {
+                    $redirectUrl = getBaseUrl() . '/donate.php';
+                }
+                if ($ipnUrl === '') {
+                    $ipnUrl = getBaseUrl() . '/api/momo_notify.php';
+                }
+
+                $extraData = base64_encode(json_encode([
+                    'trans_id' => $transId,
+                    'user_id' => (int)$_SESSION['user_id'],
+                ], JSON_UNESCAPED_UNICODE));
+                $orderInfo = 'Quyen gop Goodwill #' . $transId;
+                $amountStr = (string)((int)round($amount));
+
+                $signature = buildMomoCreateSignature(
+                    $momoCfg,
+                    $amountStr,
+                    $extraData,
+                    $ipnUrl,
+                    $orderId,
+                    $orderInfo,
+                    $redirectUrl,
+                    $requestId,
+                    $requestType
+                );
+
+                $payload = [
+                    'partnerCode' => $momoCfg['partner_code'],
+                    'accessKey' => $momoCfg['access_key'],
+                    'requestId' => $requestId,
+                    'amount' => $amountStr,
+                    'orderId' => $orderId,
+                    'orderInfo' => $orderInfo,
+                    'redirectUrl' => $redirectUrl,
+                    'ipnUrl' => $ipnUrl,
+                    'extraData' => $extraData,
+                    'requestType' => $requestType,
+                    'lang' => 'vi',
+                    'partnerName' => trim((string)($momoCfg['partner_name'] ?? 'Goodwill Vietnam')),
+                    'storeId' => trim((string)($momoCfg['store_id'] ?? 'GoodwillStore')),
+                    'signature' => $signature,
+                ];
+
+                $momoRes = postJson($momoCfg['endpoint'], $payload);
+                $payUrl = trim((string)($momoRes['payUrl'] ?? ''));
+                $resultCode = (string)($momoRes['resultCode'] ?? '');
+                if ($payUrl === '' || $resultCode !== '0') {
+                    $msg = trim((string)($momoRes['message'] ?? 'Không thể tạo yêu cầu thanh toán MoMo.'));
+                    throw new RuntimeException($msg);
+                }
+
+                header('Location: ' . $payUrl);
+                exit;
+            } else {
+                header('Location: sandbox_payment.php?method=' . urlencode($method) . '&trans_id=' . $transId);
+                exit;
+            }
+        } catch (Throwable $e) {
+            if (!empty($transId)) {
+                Database::execute('UPDATE transactions SET status = ?, updated_at = NOW() WHERE trans_id = ? AND status = ?', ['cancelled', (int)$transId, 'pending']);
+            }
+            $paymentError = 'Không thể tạo thanh toán: ' . $e->getMessage();
         }
     }
 }
 
-// Xử lý xác nhận đã chuyển khoản
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim($_POST['action'] ?? '') === 'confirm_bank_transfer') {
-    $transId = (int)($_POST['trans_id'] ?? 0);
-    $tx = Database::fetch('SELECT * FROM transactions WHERE trans_id = ? AND user_id = ?', [$transId, $_SESSION['user_id']]);
-    if (!$tx) {
-        $paymentError = 'Giao dịch không hợp lệ.';
-    } elseif ($tx['payment_method'] !== 'bank_transfer') {
-        $paymentError = 'Giao dịch không thuộc phương thức chuyển khoản.';
-    } elseif ($tx['status'] !== 'pending') {
-        $paymentError = 'Giao dịch đã được cập nhật.';
-    } else {
-        Database::execute('UPDATE transactions SET status = ?, payment_reference = ?, updated_at = NOW() WHERE trans_id = ?', ['completed', 'BANK-' . uniqid(), $transId]);
-        logActivity($_SESSION['user_id'], 'donation_payment', "Bank transfer completed transaction #$transId");
-        $paymentSuccess = 'Cảm ơn! Chúng tôi đã ghi nhận bạn đã chuyển khoản. Bạn có thể theo dõi giao dịch trong trang của tôi.';
-    }
-}
-
 // 2) X? lư submit thêm quyên góp (không ph?i upload excel)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) && $_FILES['donation_excel']['error'] === UPLOAD_ERR_OK)) {
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && trim($_POST['action'] ?? '') !== 'money_donation'
+    && !(isset($_FILES['donation_excel']) && $_FILES['donation_excel']['error'] === UPLOAD_ERR_OK)
+) {
     $items = [];
     $itemNames = $_POST['item_name'] ?? [];
     $descriptions = $_POST['description'] ?? [];
@@ -682,6 +947,132 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) 
     $count = is_array($itemNames) ? count($itemNames) : 0;
     if (!$error && $count === 0) {
         $error = "Vui lòng thêm ít nhất 1 vật phẩm.";
+    }
+
+    /**
+     * Hàm kiểm tra ảnh có chứa nội dung khỏa thân/18+ qua Hugging Face API
+     */
+    function checkNsfwImageHuggingFace(string $imagePath): bool {
+        // API Token của bạn trên Hugging Face
+        $apiToken = "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"; 
+        
+        $apiUrl = "https://api-inference.huggingface.co/models/Qwen/Qwen3.5-35B-A3B";
+
+        if (empty(trim($apiToken)) || $apiToken === 'YOUR_HUGGINGFACE_TOKEN_HERE') {
+            return false; // Bỏ qua nếu chưa cài token
+        }
+
+        $imageData = @file_get_contents($imagePath);
+        if (!$imageData) return false;
+
+        $base64Image = base64_encode($imageData);
+        // Định dạng payload gửi lên Qwen (Text Generation model) thông qua HF Inference API
+        $payload = json_encode([
+            "inputs" => "Classify if this image contains 18+, porn, nudity, or NSFW content. Respond with 'nsfw' if it is inappropriate, or 'safe' if it is clean. Image: " . $base64Image,
+        ]);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $apiUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        // Tắt kiểm tra chứng chỉ SSL (sử dụng trên XAMPP)
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0"); // Một số API yêu cầu User-Agent
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Authorization: Bearer $apiToken",
+            "Content-Type: application/json"
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        // Ghi log để bạn dễ dàng theo dõi lỗi API từ file php_error.log của XAMPP
+        error_log("[NSFW CHECK] HTTP Code: $httpCode | CURL Error: $curlError | Response: $response");
+
+        if ($httpCode === 200 && $response) {
+            $data = json_decode($response, true);
+            // Cấu trúc trả về thường là mảng các object hoặc mảng lồng
+            $items = isset($data[0]) && is_array($data[0]) ? (isset($data[0]['label']) ? $data : $data[0]) : $data;
+            
+            if (is_array($items)) {
+                foreach ($items as $class) {
+                    if (isset($class['label']) && strtolower($class['label']) === 'nsfw' && $class['score'] > 0.6) {
+                        return true;
+                    }
+                }
+            }
+            
+            // Xử lý giá trị trả về của model Qwen LLM
+            $responseText = strtolower($response);
+            if (
+                strpos($responseText, 'nsfw') !== false || 
+                strpos($responseText, '18+') !== false || 
+                strpos($responseText, 'porn') !== false || 
+                strpos($responseText, 'nude') !== false || 
+                strpos($responseText, 'khỏa thân') !== false || 
+                strpos($responseText, 'sex') !== false
+            ) {
+                return true;
+            }
+        } elseif ($httpCode === 503) {
+            // Model đang được tải lên RAM của Hugging Face (sleep)
+            throw new Exception("Hệ thống kiểm duyệt ảnh đang khởi động (Model loading). Vui lòng chờ 30 giây và thử lại.");
+        } elseif ($httpCode !== 200) {
+            throw new Exception("Lỗi hệ thống kiểm duyệt ảnh (Mã lỗi: $httpCode). Vui lòng thử lại sau.");
+        }
+        return false;
+    }
+
+    /**
+     * Hàm kiểm tra nội dung văn bản có chứa từ ngữ tục tĩu, thô thiển qua API Google Gemini
+     */
+    function checkToxicTextGemini(string $text): bool {
+        $allText = trim($text);
+        // Thay YOUR_GEMINI_API_KEY_HERE bằng API Key của Google Gemini
+        $apiKey = "AIzaSyCve4ReDIG4oWFZzA36sOp2o-I1nIq3Wxw";
+        if (empty(trim($apiKey)) || $apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
+            return false;
+        }
+
+        $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+
+        $prompt = "Bạn là công cụ kiểm duyệt nội dung. Hãy kiểm tra xem đoạn văn bản sau đây có chứa từ ngữ tục tĩu, thô thiển, chửi thề, hay sỉ nhục người khác hay không.\nTrả lời CHỈ VỚI 1 CHỮ duy nhất: 'YES' (nếu có vi phạm) hoặc 'NO' (nếu an toàn).\nVăn bản: \"$text\"";
+
+        $postData = json_encode([
+            "contents" => [
+                ["parts" => [["text" => $prompt]]]
+            ]
+        ]);
+
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        error_log("[GEMINI CHECK] HTTP: $httpCode | CURL: $curlError | Content: $allText | Response: $response");
+
+        if ($httpCode === 200 && $response) {
+            $data = json_decode($response, true);
+            if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+                $answer = trim(strtoupper($data['candidates'][0]['content']['parts'][0]['text']));
+                if (strpos($answer, 'YES') !== false || strpos($answer, 'CÓ') !== false) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     for ($i = 0; !$error && $i < $count; $i++) {
@@ -718,22 +1109,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) 
         ];
     }
 
+    $globalRejectStatus = 'pending';
+    $globalRejectNotes = null;
+
+    // Kiểm tra toàn bộ văn bản (Tên & Mô tả) bằng AI Gemini
+    if (!$error) {
+        $allTextToCheck = "";
+        foreach ($items as $item) {
+            $allTextToCheck .= $item['name'] . "\n" . $item['description'] . "\n";
+        }
+        
+        if (trim($allTextToCheck) !== '' && checkToxicTextGemini($allTextToCheck)) {
+            // Đánh dấu từ chối thay vì báo lỗi hiển thị luôn (để Admin có dữ liệu)
+            $globalRejectStatus = 'rejected';
+            $globalRejectNotes = 'Hệ thống AI tự động từ chối: Tên hoặc mô tả có chứa từ ngữ tục tĩu, thô thiển hoặc sỉ nhục.';
+        }
+    }
+
     if (!$error) {
         try {
             Database::beginTransaction();
 
             $sql = "INSERT INTO donations (user_id, item_name, description, category_id, quantity, unit, 
                     condition_status, estimated_value, images, pickup_address, pickup_date, pickup_time, 
-                    contact_phone, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                    contact_phone, status, admin_notes, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
             foreach ($items as $item) {
                 $images = [];
                 $googleDriveIds = []; // Lưu ID Google Drive files
                 
+                $itemRejectStatus = $globalRejectStatus;
+                $itemRejectNotes = $globalRejectNotes;
+
                 // tải ảnh từ URL (Nhập từ Excel/CSV)
                 if (!empty($item['image_urls'])) {
-                    $images = array_merge($images, downloadItemImagesFromUrls($item['image_urls'], 'uploads/donations/'));
+                    $downloadedImages = downloadItemImagesFromUrls($item['image_urls'], 'uploads/donations/');
+                    foreach ($downloadedImages as $imgFile) {
+                        $imgPath = 'uploads/donations/' . $imgFile;
+                        // Kiểm tra nếu là cảnh NSFW
+                        if (checkNsfwImageHuggingFace($imgPath)) {
+                            @unlink($imgPath); // Xóa file tải về nếu vi phạm
+                            $itemRejectStatus = 'rejected';
+                            $globalRejectStatus = 'rejected';
+                            $globalRejectNotes = 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw';
+                            $itemRejectNotes = $globalRejectNotes;
+                        } else {
+                            $images[] = $imgFile;
+                        }
+                    }
                 }
                 if (isset($_FILES['item_images']['name'][$item['__index']])) {
                     $uploadDir = 'uploads/donations/';
@@ -757,16 +1181,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) 
                             ];
                             $uploadResult = uploadFile($file, $uploadDir);
                             if ($uploadResult['success']) {
-                                $images[] = $uploadResult['filename'];
-                                
-                                // Tự động upload lên Google Drive (nếu đã cấu hình)
-                                $gdriveId = uploadFileToGoogleDrive(
-                                    $uploadResult['path'],
-                                    'donation_' . uniqid() . '.' . pathinfo($uploadResult['filename'], PATHINFO_EXTENSION)
-                                );
-                                if ($gdriveId) {
-                                    $googleDriveIds[] = $gdriveId;
-                                    error_log("[Donation] Image backed up to Google Drive: " . $gdriveId);
+                                // Kiểm tra nội dung 18+ (NSFW)
+                                if (checkNsfwImageHuggingFace($uploadResult['path'])) {
+                                    @unlink($uploadResult['path']); // Xóa file ngay lập tức
+                                    $itemRejectStatus = 'rejected';
+                                    $globalRejectStatus = 'rejected';
+                                    $globalRejectNotes = 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw';
+                                    $itemRejectNotes = $globalRejectNotes;
+                                } else {
+                                    $images[] = $uploadResult['filename'];
+                                    
+                                    // Tự động upload lên Google Drive (nếu đã cấu hình)
+                                    $gdriveId = uploadFileToGoogleDrive(
+                                        $uploadResult['path'],
+                                        'donation_' . uniqid() . '.' . pathinfo($uploadResult['filename'], PATHINFO_EXTENSION)
+                                    );
+                                    if ($gdriveId) {
+                                        $googleDriveIds[] = $gdriveId;
+                                    }
                                 }
                             }
                         }
@@ -791,7 +1223,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) 
                     $pickup_address_full,
                     $pickup_date ?: null,
                     $pickup_time ?: null,
-                    $contact_phone
+                    $contact_phone,
+                    $itemRejectStatus,
+                    $itemRejectNotes
                 ]);
 
                 $donation_id = Database::lastInsertId();
@@ -807,7 +1241,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !(isset($_FILES['donation_excel']) 
             }
 
             Database::commit();
-            $success = "Quyên góp dă được gửi. Bạn có thể theo dõi trong trang của tôi.";
+            if ($globalRejectStatus === 'rejected') {
+                if ($globalRejectNotes === 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw') {
+                    $error = $globalRejectNotes;
+                } else {
+                    $error = "Quyên góp của bạn đã bị từ chối tự động vì lý do: " . $globalRejectNotes;
+                }
+                // Không hiển thị success message
+                $success = '';
+            } else {
+                $success = "Quyên góp đã được gửi. Bạn có thể theo dõi trong trang của tôi.";
+                $error = '';
+            }
             $_POST = [];
         } catch (Exception $e) {
             Database::rollback();
@@ -1152,33 +1597,9 @@ include 'includes/header.php';
                                     <div class="d-flex gap-2 flex-wrap">
                                         <button type="button" class="btn btn-outline-success" id="pay-zalopay" style="border-color: #06B6D4; color: #06B6D4;">ZaloPay</button>
                                         <button type="button" class="btn btn-outline-danger" id="pay-momo" style="border-color: #06B6D4; color: #06B6D4;">Momo</button>
-                                        <button type="button" class="btn btn-outline-secondary" id="pay-bank" style="border-color: #06B6D4; color: #06B6D4;">Chuyển khoản</button>
                                     </div>
                                 </div>
                             </form>
-
-                            <?php if (!empty($bankTransferPendingId) && !empty($bankDetails)): ?>
-                                <div class="card mt-3" style="border: 1px solid #cffafe; border-radius: 12px;">
-                                    <div class="card-header text-white" style="background: linear-gradient(135deg, #06B6D4 0%, #22d3ee 100%);">
-                                        <h5 class="mb-0">Thông tin chuyển khoản</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <p>Cảm ơn bạn đã chọn chuyển khoản. Vui lòng chuyển đúng số tiền và ghi rõ nội dung:</p>
-                                        <ul class="list-unstyled">
-                                            <?php if (!empty($bankDetails['account_name'])): ?><li><strong>Chủ tài khoản:</strong> <?php echo htmlspecialchars($bankDetails['account_name']); ?></li><?php endif; ?>
-                                            <?php if (!empty($bankDetails['account_number'])): ?><li><strong>Số tài khoản:</strong> <?php echo htmlspecialchars($bankDetails['account_number']); ?></li><?php endif; ?>
-                                            <?php if (!empty($bankDetails['bank_name'])): ?><li><strong>Ngân hàng:</strong> <?php echo htmlspecialchars($bankDetails['bank_name']); ?></li><?php endif; ?>
-                                            <?php if (!empty($bankDetails['branch'])): ?><li><strong>Chi nhánh:</strong> <?php echo htmlspecialchars($bankDetails['branch']); ?></li><?php endif; ?>
-                                            <?php if (!empty($bankDetails['note'])): ?><li><strong>Ghi chú:</strong> <?php echo htmlspecialchars($bankDetails['note']); ?></li><?php endif; ?>
-                                        </ul>
-                                        <form method="POST">
-                                            <input type="hidden" name="action" value="confirm_bank_transfer">
-                                            <input type="hidden" name="trans_id" value="<?php echo (int)$bankTransferPendingId; ?>">
-                                            <button type="submit" class="btn btn-lg fw-bold" style="background: linear-gradient(135deg, #06B6D4 0%, #22d3ee 100%); color: white; border: none;">Tôi đã chuyển khoản</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -1189,22 +1610,8 @@ include 'includes/header.php';
 
 <style>
     .donate-page {
-        background: linear-gradient(-45deg, #f4fafd, #e0f2fe, #f0f9ff, #cffafe);
-        background-size: 400% 400%;
-        animation: gradientShift 15s ease infinite;
+        background: #f4fafd;
         min-height: calc(100vh - 110px);
-    }
-
-    @keyframes gradientShift {
-        0% {
-            background-position: 0% 50%;
-        }
-        50% {
-            background-position: 100% 50%;
-        }
-        100% {
-            background-position: 0% 50%;
-        }
     }
 
     .donate-hero {
@@ -1212,16 +1619,6 @@ include 'includes/header.php';
         padding: 64px 0 52px;
         position: relative;
         overflow: hidden;
-        animation: heroFloat 6s ease-in-out infinite;
-    }
-
-    @keyframes heroFloat {
-        0%, 100% {
-            transform: translateY(0px);
-        }
-        50% {
-            transform: translateY(-10px);
-        }
     }
 
     .donate-hero::before {
@@ -1297,16 +1694,6 @@ include 'includes/header.php';
         font-weight: 700;
         font-size: 0.9rem;
         white-space: nowrap;
-        animation: badgeGlow 3s ease-in-out infinite alternate;
-    }
-
-    @keyframes badgeGlow {
-        0% {
-            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-        }
-        100% {
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.4), 0 0 25px rgba(6, 182, 212, 0.2);
-        }
     }
 
     .donate-side-panel {
@@ -1362,10 +1749,8 @@ include 'includes/header.php';
     }
 
     .item-block:hover {
-        box-shadow: 0 8px 20px rgba(6, 182, 212, 0.12), 0 0 20px rgba(6, 182, 212, 0.1);
+        box-shadow: 0 8px 20px rgba(6, 182, 212, 0.12);
         border-color: #a5f3fc !important;
-        transform: translateY(-2px);
-        transition: all 0.3s ease;
     }
 
     .item-block h5 {
@@ -1648,16 +2033,9 @@ include 'includes/header.php';
             moneyRadio.addEventListener('change', sync);
             sync();
 
-            <?php if (!empty($bankTransferPendingId)): ?>
-                if (paymentOptions) {
-                    paymentOptions.classList.remove('d-none');
-                }
-            <?php endif; ?>
-
             const paymentMethodInput = document.getElementById('payment_method_input');
             const payZaloBtn = document.getElementById('pay-zalopay');
             const payMomoBtn = document.getElementById('pay-momo');
-            const payBankBtn = document.getElementById('pay-bank');
             const moneyForm = moneyBtn ? moneyBtn.closest('form') : null;
 
             if (moneyBtn && paymentOptions) {
@@ -1679,9 +2057,6 @@ include 'includes/header.php';
             }
             if (payMomoBtn) {
                 payMomoBtn.addEventListener('click', () => submitPayment('momo'));
-            }
-            if (payBankBtn) {
-                payBankBtn.addEventListener('click', () => submitPayment('bank_transfer'));
             }
         })();
 

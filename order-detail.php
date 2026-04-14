@@ -50,7 +50,7 @@ function getCarrierLabel(?string $carrier): string
         'j&t', 'jt', 'jnt' => 'J&T Express',
         'vnpost' => 'VNPost',
         'grab' => 'GrabExpress',
-        default => $carrier ? (string)$carrier : 'Chua chon',
+        default => $carrier ? (string)$carrier : 'Chưa chọn',
     };
 }
 
@@ -58,15 +58,17 @@ function getCarrierStatusMeta(?string $status): array
 {
     $status = strtolower(trim((string)$status));
     return match ($status) {
-        'created' => ['class' => 'secondary', 'text' => 'Da tao van don', 'icon' => 'receipt'],
-        'waiting_pickup' => ['class' => 'warning', 'text' => 'Cho lay hang', 'icon' => 'clock'],
-        'picked_up' => ['class' => 'info', 'text' => 'Da lay hang', 'icon' => 'box-seam'],
-        'in_transit' => ['class' => 'primary', 'text' => 'Dang trung chuyen', 'icon' => 'truck'],
-        'out_for_delivery' => ['class' => 'primary', 'text' => 'Dang giao', 'icon' => 'truck'],
-        'delivered' => ['class' => 'success', 'text' => 'Giao thanh cong', 'icon' => 'house-check'],
-        'failed_delivery' => ['class' => 'danger', 'text' => 'Giao that bai', 'icon' => 'x-circle'],
-        'returning' => ['class' => 'warning', 'text' => 'Dang hoan', 'icon' => 'arrow-return-left'],
-        'returned' => ['class' => 'dark', 'text' => 'Da hoan', 'icon' => 'arrow-return-left'],
+        'payment_completed' => ['class' => 'success', 'text' => 'Đã thanh toán', 'icon' => 'wallet2'],
+        'payment_pending' => ['class' => 'warning', 'text' => 'Chưa hoàn tất thanh toán', 'icon' => 'wallet2'],
+        'created' => ['class' => 'secondary', 'text' => 'Đã tạo vận đơn', 'icon' => 'receipt'],
+        'waiting_pickup' => ['class' => 'warning', 'text' => 'Chờ lấy hàng', 'icon' => 'clock'],
+        'picked_up' => ['class' => 'info', 'text' => 'Đã lấy hàng', 'icon' => 'box-seam'],
+        'in_transit' => ['class' => 'primary', 'text' => 'Đang trung chuyển', 'icon' => 'truck'],
+        'out_for_delivery' => ['class' => 'primary', 'text' => 'Đang giao', 'icon' => 'truck'],
+        'delivered' => ['class' => 'success', 'text' => 'Giao thành công', 'icon' => 'house-check'],
+        'failed_delivery' => ['class' => 'danger', 'text' => 'Giao thất bại', 'icon' => 'x-circle'],
+        'returning' => ['class' => 'warning', 'text' => 'Đang hoàn', 'icon' => 'arrow-return-left'],
+        'returned' => ['class' => 'dark', 'text' => 'Đã hoàn', 'icon' => 'arrow-return-left'],
         default => ['class' => 'light text-dark', 'text' => $status !== '' ? $status : '—', 'icon' => 'info-circle'],
     };
 }
@@ -90,6 +92,18 @@ function splitVietnameseAddress(?string $address): array
     $detail = trim(implode(', ', array_slice($parts, 0, $count - 3)));
 
     return ['detail' => $detail, 'ward' => $ward, 'district' => $district, 'city' => $city];
+}
+
+function getOrderPaymentMethodLabel(?string $method): string
+{
+    $method = strtolower(trim((string)$method));
+    return match ($method) {
+        'cod', 'cash' => 'Thanh toán khi nhận hàng (COD)',
+        'momo' => 'Ví MoMo',
+        'zalopay' => 'Ví ZaloPay',
+        'bank_transfer' => 'Chuyển khoản ngân hàng',
+        default => $method !== '' ? strtoupper($method) : 'Chưa cập nhật',
+    };
 }
 
 $pageTitle = "Chi tiết đơn hàng";
@@ -147,6 +161,23 @@ try {
 include 'includes/header.php';
 
 $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '');
+$orderPaymentMethod = strtolower(trim((string)($order['payment_method'] ?? '')));
+$orderPaymentStatus = strtolower(trim((string)($order['payment_status'] ?? '')));
+$orderPaymentReference = trim((string)($order['payment_reference'] ?? ''));
+$orderStatus = strtolower(trim((string)($order['status'] ?? '')));
+$lastMileStatusKey = strtolower(trim((string)($order['shipping_last_mile_status'] ?? '')));
+$hasPaymentStatusField = array_key_exists('payment_status', $order);
+$isPaidOrder = $hasPaymentStatusField
+    ? $orderPaymentStatus === 'paid'
+    : (stripos($orderPaymentReference, 'MOMO-') === 0 || stripos($orderPaymentReference, 'ZALO-') === 0);
+$isOnlineUnpaidOrder = (float)($order['total_amount'] ?? 0) > 0
+    && in_array($orderPaymentMethod, ['bank_transfer', 'momo', 'zalopay'], true)
+    && !$isPaidOrder;
+$isMarkedPaymentPending = $lastMileStatusKey === 'payment_pending';
+$canRepayOrder = ($isOnlineUnpaidOrder || $isMarkedPaymentPending)
+    && !$isPaidOrder
+    && $orderStatus !== 'cancelled';
+$payError = trim((string)($_GET['pay_error'] ?? ''));
 ?>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -155,6 +186,12 @@ $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '')
 
 <!-- Main Content -->
 <div class="container py-5 mt-5 order-detail-page">
+    <?php if ($payError !== ''): ?>
+        <div class="alert alert-danger mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($payError); ?>
+        </div>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -218,7 +255,7 @@ $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '')
                     $shippingFee = (float)($order['shipping_fee'] ?? 0);
 
                     $statusClass = 'secondary';
-                    $statusText = 'Dang cap nhat';
+                    $statusText = 'Đang cập nhật';
                     $statusIcon = 'info-circle';
 
                     $lastMileStatus = trim((string)($order['shipping_last_mile_status'] ?? ''));
@@ -231,30 +268,36 @@ $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '')
                         switch ($order['status']) {
                             case 'pending':
                                 $statusClass = 'warning';
-                                $statusText = 'Cho xu ly';
+                                $statusText = 'Chờ xử lý';
                                 $statusIcon = 'clock';
                                 break;
                             case 'confirmed':
                                 $statusClass = 'info';
-                                $statusText = 'Da xac nhan';
+                                $statusText = 'Đã xác nhận';
                                 $statusIcon = 'check-circle';
                                 break;
                             case 'shipping':
                                 $statusClass = 'primary';
-                                $statusText = 'Dang giao';
+                                $statusText = 'Đang giao';
                                 $statusIcon = 'truck';
                                 break;
                             case 'delivered':
                                 $statusClass = 'success';
-                                $statusText = 'Da giao';
+                                $statusText = 'Đã giao';
                                 $statusIcon = 'house-check';
                                 break;
                             case 'cancelled':
                                 $statusClass = 'danger';
-                                $statusText = 'Da huy';
+                                $statusText = 'Đã hủy';
                                 $statusIcon = 'x-circle';
                                 break;
                         }
+                    }
+
+                    if ($isOnlineUnpaidOrder) {
+                        $statusClass = 'warning';
+                        $statusText = 'Chưa hoàn tất thanh toán';
+                        $statusIcon = 'wallet2';
                     }
                     ?>
                     <div class="text-center order-status-wrap">
@@ -414,8 +457,13 @@ $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '')
                     <div class="mb-3">
                         <h6 class="text-success mb-3">Thông tin thanh toán</h6>
                         <p class="mb-1"><strong>Phương thức:</strong> 
-                            <?php echo $order['payment_method'] === 'cod' ? 'Thanh toán khi nhận hàng (COD)' : 'Chuyển khoản ngân hàng'; ?>
+                            <?php echo htmlspecialchars(getOrderPaymentMethodLabel($order['payment_method'] ?? '')); ?>
                         </p>
+                        <?php if (array_key_exists('payment_status', $order)): ?>
+                            <p class="mb-1"><strong>Trạng thái thanh toán:</strong>
+                                <?php echo $isPaidOrder ? '<span class="text-success fw-semibold">Đã thanh toán</span>' : '<span class="text-warning fw-semibold">Chưa hoàn tất thanh toán</span>'; ?>
+                            </p>
+                        <?php endif; ?>
                         <p class="mb-1"><strong>Ngày đặt:</strong> <?php echo date('d/m/Y H:i', strtotime($order['created_at'])); ?></p>
                         <p class="mb-1"><strong>Cập nhật cuối:</strong> <?php echo date('d/m/Y H:i', strtotime($order['updated_at'])); ?></p>
                     </div>
@@ -447,6 +495,13 @@ $shippingAddressParts = splitVietnameseAddress($order['shipping_address'] ?? '')
 
                     <!-- Actions -->
                     <div class="d-grid gap-2">
+                        <?php if ($canRepayOrder): ?>
+                            <a href="order-pay.php?id=<?php echo (int)$order['order_id']; ?>&method=momo"
+                               class="btn btn-order-primary">
+                                <i class="bi bi-wallet2 me-2"></i>Thanh toán đơn hàng
+                            </a>
+                        <?php endif; ?>
+
                         <?php if ($order['status'] === 'pending'): ?>
                             <button class="btn btn-order-danger" onclick="cancelOrder(<?php echo $order['order_id']; ?>)">
                                 <i class="bi bi-x-circle me-2"></i>Hủy đơn hàng

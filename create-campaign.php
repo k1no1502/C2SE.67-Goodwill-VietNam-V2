@@ -58,10 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description = sanitize($_POST['description'] ?? '');
     $start_date = $_POST['start_date'] ?? '';
     $end_date = $_POST['end_date'] ?? '';
+    $target_amount = isset($_POST['target_amount']) ? (float)$_POST['target_amount'] : 0;
     
     // Validate
     if (empty($name) || empty($description) || empty($start_date) || empty($end_date)) {
         $error = 'Vui lòng điền đầy đủ thông tin bắt buộc.';
+    } elseif ($target_amount < 0) {
+        $error = 'Số tiền cần thiết không được nhỏ hơn 0.';
     } elseif (strtotime($start_date) < time()) {
         $error = 'Ngày bắt đầu phải từ hôm nay trở đi.';
     } elseif (strtotime($end_date) <= strtotime($start_date)) {
@@ -175,8 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Insert campaign with pending status for admin approval
             $sql = "INSERT INTO campaigns (name, description, image, video_type, video_file, video_youtube, video_facebook, video_tiktok,
-                    start_date, end_date, target_items, status, created_by, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
+                    start_date, end_date, target_amount, target_items, status, created_by, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
             Database::execute($sql, [
                 $name,
                 $description,
@@ -188,6 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tiktokLink,
                 $start_date,
                 $end_date,
+                $target_amount > 0 ? $target_amount : null,
                 $_SESSION['user_id']
             ]);
             
@@ -552,6 +556,21 @@ include 'includes/header.php';
                         <!-- Campaign Details -->
                         <div class="mb-4">
                             <div class="cc-section-title"><i class="bi bi-calendar3 me-2"></i>Thời gian chiến dịch</div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="target_amount" class="form-label">Số tiền cần thiết (VND)</label>
+                                    <input type="number"
+                                           class="form-control"
+                                           id="target_amount"
+                                           name="target_amount"
+                                           value="<?php echo htmlspecialchars($_POST['target_amount'] ?? ''); ?>"
+                                           min="0"
+                                           step="1000"
+                                           placeholder="Ví dụ: 50000000">
+                                    <div class="form-text">Có thể để trống nếu chiến dịch chỉ tập trung vào vật phẩm.</div>
+                                </div>
+                            </div>
                             
                             <div class="row">
                                 <div class="col-md-6 mb-3">

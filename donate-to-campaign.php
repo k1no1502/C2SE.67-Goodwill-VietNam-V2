@@ -36,8 +36,412 @@ $categories = Database::fetchAll("SELECT * FROM categories WHERE status = 'activ
 $success = '';
 $error = '';
 $completeMessage = "\u{0110}\u{00E3} \u{0111}\u{1EE7} quy\u{00EA}n g\u{00F3}p";
+$paymentConfig = [];
+$paymentConfigPath = __DIR__ . '/config/payment.php';
+if (file_exists($paymentConfigPath)) {
+    $paymentConfig = require $paymentConfigPath;
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$selectedDonateMode = 'campaign_item';
+if (trim((string)($_POST['action'] ?? '')) === 'money_donation' || !empty($_GET['payment_success']) || !empty($_GET['payment_error'])) {
+    $selectedDonateMode = 'money';
+} elseif (trim((string)($_POST['donate_type'] ?? '')) === 'custom') {
+    $selectedDonateMode = 'custom';
+}
+
+function campaignDonateGetBaseUrl(): string
+{
+    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $scheme = $isHttps ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host;
+}
+
+function campaignDonatePostJson(string $url, array $payload): array
+{
+    $ch = curl_init($url);
+    if ($ch === false) {
+        throw new RuntimeException('Không thể khởi tạo kết nối thanh toán.');
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException('Lỗi kết nối cổng thanh toán: ' . $curlError);
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Phản hồi từ cổng thanh toán không hợp lệ.');
+    }
+
+    if ($httpCode >= 400) {
+        $gatewayMessage = trim((string)($decoded['message'] ?? ''));
+        throw new RuntimeException('Cổng thanh toán trả về lỗi HTTP ' . $httpCode . ($gatewayMessage !== '' ? ': ' . $gatewayMessage : ''));
+    }
+
+    return $decoded;
+}
+
+function campaignDonateBuildMomoCreateSignature(array $momo, string $amount, string $extraData, string $ipnUrl, string $orderId, string $orderInfo, string $redirectUrl, string $requestId, string $requestType): string
+{
+    $rawHash = 'accessKey=' . $momo['access_key']
+        . '&amount=' . $amount
+        . '&extraData=' . $extraData
+        . '&ipnUrl=' . $ipnUrl
+        . '&orderId=' . $orderId
+        . '&orderInfo=' . $orderInfo
+        . '&partnerCode=' . $momo['partner_code']
+        . '&redirectUrl=' . $redirectUrl
+        . '&requestId=' . $requestId
+        . '&requestType=' . $requestType;
+
+    return hash_hmac('sha256', $rawHash, $momo['secret_key']);
+}
+
+function campaignDonateExtractTransIdFromMomoData(?string $orderId, ?string $extraData): int
+{
+    $orderId = (string)$orderId;
+    if (preg_match('/^CDONATE(\d+)_/i', $orderId, $m)) {
+        return (int)$m[1];
+    }
+
+    $extraData = trim((string)$extraData);
+    if ($extraData !== '') {
+        $decoded = base64_decode($extraData, true);
+        if ($decoded !== false) {
+            $arr = json_decode($decoded, true);
+            if (is_array($arr) && !empty($arr['trans_id'])) {
+                return (int)$arr['trans_id'];
+            }
+        }
+    }
+
+    return 0;
+}
+
+function campaignDonateVerifyMomoResponseSignature(array $payload, string $secretKey): bool
+{
+    $required = ['amount', 'extraData', 'message', 'orderId', 'orderInfo', 'orderType', 'partnerCode', 'payType', 'requestId', 'responseTime', 'resultCode', 'transId', 'signature'];
+    foreach ($required as $key) {
+        if (!array_key_exists($key, $payload)) {
+            return false;
+        }
+    }
+
+    $rawHash = 'accessKey=' . $payload['accessKey']
+        . '&amount=' . $payload['amount']
+        . '&extraData=' . $payload['extraData']
+        . '&message=' . $payload['message']
+        . '&orderId=' . $payload['orderId']
+        . '&orderInfo=' . $payload['orderInfo']
+        . '&orderType=' . $payload['orderType']
+        . '&partnerCode=' . $payload['partnerCode']
+        . '&payType=' . $payload['payType']
+        . '&requestId=' . $payload['requestId']
+        . '&responseTime=' . $payload['responseTime']
+        . '&resultCode=' . $payload['resultCode']
+        . '&transId=' . $payload['transId'];
+
+    $partnerSignature = hash_hmac('sha256', $rawHash, $secretKey);
+    return hash_equals($partnerSignature, (string)$payload['signature']);
+}
+
+function campaignDonateBuildMoneyNote(int $campaignId, string $campaignName, string $message = ''): string
+{
+    $lines = [
+        '[CAMPAIGN_MONEY_DONATION]',
+        'campaign_id=' . $campaignId,
+        'campaign_name=' . preg_replace('/\s+/', ' ', trim($campaignName)),
+    ];
+
+    $message = trim($message);
+    if ($message !== '') {
+        $lines[] = 'message=' . preg_replace('/\s+/', ' ', $message);
+    }
+
+    return implode("\n", $lines);
+}
+
+function campaignDonateExtractCampaignIdFromNote(string $note): int
+{
+    if (preg_match('/^campaign_id=(\d+)$/mi', $note, $matches)) {
+        return (int)$matches[1];
+    }
+    return 0;
+}
+
+function campaignDonateNoteHasAppliedFlag(string $note): bool
+{
+    return strpos($note, '[CAMPAIGN_AMOUNT_APPLIED]') !== false;
+}
+
+function campaignDonateAppendAppliedFlag(string $note): string
+{
+    $note = rtrim($note);
+    return $note === '' ? '[CAMPAIGN_AMOUNT_APPLIED]' : $note . "\n[CAMPAIGN_AMOUNT_APPLIED]";
+}
+
+function campaignDonateApplyMoneyTransaction(int $transId, string $paymentReference = ''): bool
+{
+    Database::beginTransaction();
+
+    try {
+        $tx = Database::fetch(
+            'SELECT trans_id, amount, status, notes, payment_reference FROM transactions WHERE trans_id = ? FOR UPDATE',
+            [$transId]
+        );
+
+        if (!$tx) {
+            Database::rollback();
+            return false;
+        }
+
+        if (strtolower((string)($tx['status'] ?? '')) !== 'completed') {
+            Database::rollback();
+            return false;
+        }
+
+        $note = (string)($tx['notes'] ?? '');
+        $campaignId = campaignDonateExtractCampaignIdFromNote($note);
+        if ($campaignId <= 0) {
+            Database::rollback();
+            return false;
+        }
+
+        if (!campaignDonateNoteHasAppliedFlag($note)) {
+            Database::execute(
+                'UPDATE campaigns SET current_amount = COALESCE(current_amount, 0) + ? WHERE campaign_id = ?',
+                [(float)$tx['amount'], $campaignId]
+            );
+            $note = campaignDonateAppendAppliedFlag($note);
+        }
+
+        $setClauses = ['notes = ?', 'updated_at = NOW()'];
+        $params = [$note];
+        if ($paymentReference !== '') {
+            $setClauses[] = 'payment_reference = ?';
+            $params[] = $paymentReference;
+        }
+        $params[] = $transId;
+
+        Database::execute('UPDATE transactions SET ' . implode(', ', $setClauses) . ' WHERE trans_id = ?', $params);
+        Database::commit();
+        return true;
+    } catch (Throwable $e) {
+        Database::rollback();
+        throw $e;
+    }
+}
+
+function campaignDonateCreateMoneyTransaction(int $userId, int $campaignId, float $amount, string $method, string $campaignName, string $message = ''): int
+{
+    $note = campaignDonateBuildMoneyNote($campaignId, $campaignName, $message);
+    Database::execute(
+        "INSERT INTO transactions (user_id, type, amount, status, payment_method, notes, created_at)
+         VALUES (?, 'donation', ?, 'pending', ?, ?, NOW())",
+        [$userId, $amount, $method, $note]
+    );
+
+    return (int)Database::lastInsertId();
+}
+
+function campaignDonateRedirectSuccessPage(int $campaignId, string $campaignName, string $method, int $transId): void
+{
+    $methodLabel = strtoupper(trim($method));
+    $message = 'Thanh toán ' . ($methodLabel !== '' ? $methodLabel . ' ' : '') . 'thành công! Cảm ơn bạn đã quyên góp cho chiến dịch ' . trim($campaignName) . '.';
+    $query = [
+        'message' => $message,
+        'method' => strtolower(trim($method)),
+        'trans_id' => $transId,
+        'campaign_id' => $campaignId,
+        'campaign_name' => $campaignName,
+        'return_to' => 'campaign-detail.php?id=' . $campaignId,
+        'return_label' => 'Chi tiết chiến dịch',
+    ];
+
+    header('Location: payment-success.php?' . http_build_query($query));
+    exit();
+}
+
+if (!empty($_GET['payment_success'])) {
+    $method = strtolower(trim((string)($_GET['method'] ?? '')));
+    $transId = (int)($_GET['trans_id'] ?? 0);
+    if ($transId > 0) {
+        $tx = Database::fetch('SELECT trans_id, user_id, status FROM transactions WHERE trans_id = ?', [$transId]);
+        if ($tx && (int)$tx['user_id'] === (int)$_SESSION['user_id'] && strtolower((string)$tx['status']) === 'completed') {
+            campaignDonateApplyMoneyTransaction($transId);
+            campaignDonateRedirectSuccessPage($campaign_id, (string)($campaign['name'] ?? ''), $method, $transId);
+        }
+    }
+    $success = 'Thanh toán thành công. Cảm ơn bạn đã quyên góp cho chiến dịch.';
+}
+
+if (!empty($_GET['payment_error'])) {
+    $error = trim((string)($_GET['message'] ?? 'Thanh toán không thành công. Vui lòng thử lại.'));
+}
+
+if (!empty($_GET['orderId']) && isset($_GET['resultCode']) && !empty($_GET['signature'])) {
+    $momoCfg = $paymentConfig['momo'] ?? [];
+    $secretKey = trim((string)($momoCfg['secret_key'] ?? ''));
+    $resultCode = (string)($_GET['resultCode'] ?? '');
+    $returnParams = $_GET;
+    if (empty($returnParams['accessKey'])) {
+        $returnParams['accessKey'] = trim((string)($momoCfg['access_key'] ?? ''));
+    }
+
+    $failedMessage = '';
+    if ($secretKey === '') {
+        $failedMessage = 'Thiếu cấu hình MoMo secret_key. Vui lòng kiểm tra file config/payment.php.';
+    } elseif (!campaignDonateVerifyMomoResponseSignature($returnParams, $secretKey)) {
+        $failedMessage = 'Xác thực chữ ký MoMo thất bại.';
+    }
+
+    $transId = campaignDonateExtractTransIdFromMomoData((string)($_GET['orderId'] ?? ''), (string)($_GET['extraData'] ?? ''));
+    if ($failedMessage === '' && $transId <= 0) {
+        $failedMessage = 'Không xác định được giao dịch thanh toán.';
+    }
+
+    if ($failedMessage === '') {
+        $tx = Database::fetch('SELECT trans_id, user_id FROM transactions WHERE trans_id = ?', [$transId]);
+        if (!$tx || (int)$tx['user_id'] !== (int)$_SESSION['user_id']) {
+            $failedMessage = 'Không tìm thấy giao dịch hợp lệ để xác nhận thanh toán.';
+        }
+    }
+
+    $baseReturnUrl = 'donate-to-campaign.php?campaign_id=' . $campaign_id;
+    if ($failedMessage !== '') {
+        header('Location: ' . $baseReturnUrl . '&payment_error=1&method=momo&message=' . urlencode($failedMessage));
+        exit();
+    }
+
+    if ($resultCode === '0') {
+        $paymentReference = 'MOMO-' . trim((string)($_GET['transId'] ?? ($_GET['orderId'] ?? '')));
+        Database::execute(
+            'UPDATE transactions SET status = ?, payment_reference = ?, updated_at = NOW() WHERE trans_id = ?',
+            ['completed', $paymentReference, $transId]
+        );
+        campaignDonateApplyMoneyTransaction($transId, $paymentReference);
+        campaignDonateRedirectSuccessPage($campaign_id, (string)($campaign['name'] ?? ''), 'momo', $transId);
+    }
+
+    Database::execute(
+        'UPDATE transactions SET status = ?, updated_at = NOW() WHERE trans_id = ? AND status = ?',
+        ['cancelled', $transId, 'pending']
+    );
+    $failedMessage = 'Thanh toán MoMo không thành công: ' . trim((string)($_GET['message'] ?? 'Vui lòng thử lại.'));
+    header('Location: ' . $baseReturnUrl . '&payment_error=1&method=momo&message=' . urlencode($failedMessage));
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '')) === 'money_donation') {
+    $amount = (float)($_POST['donate_amount'] ?? 0);
+    $message = sanitize($_POST['donate_message'] ?? '');
+    $method = strtolower(trim((string)($_POST['payment_method'] ?? '')));
+    $allowedMethods = ['momo', 'zalopay'];
+    $transId = 0;
+
+    if ($amount < 1000) {
+        $error = 'Vui lòng nhập số tiền hợp lệ (tối thiểu 1.000 VND).';
+    } elseif (!in_array($method, $allowedMethods, true)) {
+        $error = 'Vui lòng chọn phương thức thanh toán.';
+    } else {
+        try {
+            $transId = campaignDonateCreateMoneyTransaction($_SESSION['user_id'], $campaign_id, $amount, $method, (string)($campaign['name'] ?? ''), $message);
+
+            if ($method === 'momo') {
+                $momoCfg = $paymentConfig['momo'] ?? [];
+                $requiredFields = ['partner_code', 'access_key', 'secret_key', 'endpoint'];
+                foreach ($requiredFields as $field) {
+                    if (trim((string)($momoCfg[$field] ?? '')) === '') {
+                        throw new RuntimeException('Thiếu cấu hình MoMo: ' . $field . '. Vui lòng cập nhật file config/payment.php.');
+                    }
+                }
+
+                $orderId = 'CDONATE' . $transId . '_' . time();
+                $requestId = $orderId;
+                $requestType = trim((string)($momoCfg['request_type'] ?? 'captureWallet'));
+                $redirectUrl = campaignDonateGetBaseUrl() . '/donate-to-campaign.php?campaign_id=' . $campaign_id;
+                $ipnUrl = campaignDonateGetBaseUrl() . '/api/momo_campaign_notify.php';
+                $amountStr = (string)((int)round($amount));
+                $extraData = base64_encode(json_encode([
+                    'trans_id' => $transId,
+                    'user_id' => (int)$_SESSION['user_id'],
+                    'campaign_id' => $campaign_id,
+                ], JSON_UNESCAPED_UNICODE));
+                $orderInfo = 'Quyen gop chien dich #' . $campaign_id . ' - GD #' . $transId;
+
+                $signature = campaignDonateBuildMomoCreateSignature(
+                    $momoCfg,
+                    $amountStr,
+                    $extraData,
+                    $ipnUrl,
+                    $orderId,
+                    $orderInfo,
+                    $redirectUrl,
+                    $requestId,
+                    $requestType
+                );
+
+                $payload = [
+                    'partnerCode' => $momoCfg['partner_code'],
+                    'accessKey' => $momoCfg['access_key'],
+                    'requestId' => $requestId,
+                    'amount' => $amountStr,
+                    'orderId' => $orderId,
+                    'orderInfo' => $orderInfo,
+                    'redirectUrl' => $redirectUrl,
+                    'ipnUrl' => $ipnUrl,
+                    'extraData' => $extraData,
+                    'requestType' => $requestType,
+                    'lang' => 'vi',
+                    'partnerName' => trim((string)($momoCfg['partner_name'] ?? 'Goodwill Vietnam')),
+                    'storeId' => trim((string)($momoCfg['store_id'] ?? 'GoodwillStore')),
+                    'signature' => $signature,
+                ];
+
+                $momoRes = campaignDonatePostJson($momoCfg['endpoint'], $payload);
+                $payUrl = trim((string)($momoRes['payUrl'] ?? ''));
+                $resultCode = (string)($momoRes['resultCode'] ?? '');
+                if ($payUrl === '' || $resultCode !== '0') {
+                    $msg = trim((string)($momoRes['message'] ?? 'Không thể tạo yêu cầu thanh toán MoMo.'));
+                    if ($msg !== '' && (mb_stripos($msg, 'số tiền tối thiểu') !== false || mb_stripos($msg, 'số tiền tối đa') !== false)) {
+                        $msg .= ' Số tiền hiện đang gửi sang MoMo là ' . number_format((int)$amountStr, 0, ',', '.') . ' VND.';
+                    }
+                    throw new RuntimeException($msg);
+                }
+
+                header('Location: ' . $payUrl);
+                exit();
+            }
+
+            $returnTo = 'donate-to-campaign.php?campaign_id=' . $campaign_id;
+            header('Location: sandbox_payment.php?method=' . urlencode($method) . '&trans_id=' . $transId . '&return_to=' . urlencode($returnTo));
+            exit();
+        } catch (Throwable $e) {
+            if ($transId > 0) {
+                Database::execute(
+                    'UPDATE transactions SET status = ?, updated_at = NOW() WHERE trans_id = ? AND status = ?',
+                    ['cancelled', $transId, 'pending']
+                );
+            }
+            $error = 'Không thể tạo thanh toán: ' . $e->getMessage();
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '')) !== 'money_donation') {
     $donate_type = $_POST['donate_type'] ?? 'custom'; // campaign_item | custom
     $item_name = sanitize($_POST['item_name'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
@@ -311,28 +715,34 @@ include 'includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- Donation Form -->
-            <form method="POST" enctype="multipart/form-data" id="donationForm">
-                
-                <!-- Donation Type Selection -->
-                <div class="card mb-4 border-0 shadow-sm">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-list-check"></i> Chọn hình thức góp</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="donate_type" id="donate_campaign" value="campaign_item" checked>
-                            <label class="btn btn-outline-primary" for="donate_campaign">
-                                <i class="bi bi-box-seam"></i> Góp theo vật phẩm chiến dịch
-                            </label>
+            <!-- Donation Type Selection -->
+            <div class="card mb-4 border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i> Chọn hình thức góp</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <input type="radio" class="btn-check" name="donate_type_selector" id="donate_campaign" value="campaign_item" <?= $selectedDonateMode === 'campaign_item' ? 'checked' : '' ?>>
+                        <label class="btn btn-outline-primary flex-fill" for="donate_campaign">
+                            <i class="bi bi-box-seam"></i> Góp theo vật phẩm chiến dịch
+                        </label>
 
-                            <input type="radio" class="btn-check" name="donate_type" id="donate_custom" value="custom">
-                            <label class="btn btn-outline-primary" for="donate_custom">
-                                <i class="bi bi-plus-circle"></i> Góp vật phẩm khác
-                            </label>
-                        </div>
+                        <input type="radio" class="btn-check" name="donate_type_selector" id="donate_custom" value="custom" <?= $selectedDonateMode === 'custom' ? 'checked' : '' ?>>
+                        <label class="btn btn-outline-primary flex-fill" for="donate_custom">
+                            <i class="bi bi-plus-circle"></i> Góp vật phẩm khác
+                        </label>
+
+                        <input type="radio" class="btn-check" name="donate_type_selector" id="donate_money" value="money" <?= $selectedDonateMode === 'money' ? 'checked' : '' ?>>
+                        <label class="btn btn-outline-primary flex-fill" for="donate_money">
+                            <i class="bi bi-cash-coin"></i> Quyên góp tiền
+                        </label>
                     </div>
                 </div>
+            </div>
+
+            <!-- Item Donation Form -->
+            <form method="POST" enctype="multipart/form-data" id="itemDonationForm">
+                <input type="hidden" name="donate_type" id="itemDonateTypeInput" value="<?= $selectedDonateMode === 'custom' ? 'custom' : 'campaign_item' ?>">
 
                 <!-- Campaign Item Section -->
                 <div id="campaignItemSection" class="card mb-4 border-0 shadow-sm">
@@ -576,12 +986,51 @@ include 'includes/header.php';
                 </div>
 
             </form>
+
+            <div id="moneyDonationSection" class="card mb-4 border-0 shadow-sm" style="display: none;">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Quyên góp tiền cho chiến dịch</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="moneyDonationForm">
+                        <input type="hidden" name="action" value="money_donation">
+                        <input type="hidden" name="payment_method" id="payment_method_input" value="">
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="donate_amount" class="form-label">Số tiền quyên góp (VND) <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="donate_amount" name="donate_amount" min="1000" step="1000" placeholder="Ví dụ: 500000" value="<?= htmlspecialchars((string)($_POST['donate_amount'] ?? '')) ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="donate_message" class="form-label">Lời nhắn</label>
+                                <input type="text" class="form-control" id="donate_message" name="donate_message" placeholder="Ví dụ: Chúc chiến dịch thành công" value="<?= htmlspecialchars((string)($_POST['donate_message'] ?? '')) ?>">
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="button" id="showPaymentOptionsBtn" class="btn btn-primary btn-lg">
+                                <i class="bi bi-wallet2"></i> Chọn cổng thanh toán
+                            </button>
+                        </div>
+
+                        <div id="moneyPaymentOptions" class="mt-3 d-none">
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i> Chọn ZaloPay hoặc MoMo để hoàn tất quyên góp tiền cho chiến dịch này.
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-outline-info" id="pay-zalopay">ZaloPay</button>
+                                <button type="button" class="btn btn-outline-danger" id="pay-momo">MoMo</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <?php
-$additionalScripts = "
+$additionalScripts = <<<'SCRIPT'
 <script>
 // Vietnam location data
 const vietnamData = {
@@ -598,7 +1047,10 @@ const vietnamData = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    const donateTypeRadios = document.querySelectorAll('input[name=\"donate_type\"]');
+    const donateTypeRadios = document.querySelectorAll('input[name="donate_type_selector"]');
+    const itemDonationForm = document.getElementById('itemDonationForm');
+    const itemDonateTypeInput = document.getElementById('itemDonateTypeInput');
+    const moneyDonationSection = document.getElementById('moneyDonationSection');
     const campaignItemSection = document.getElementById('campaignItemSection');
     const customDonationSection = document.getElementById('customDonationSection');
     const campaignItemSelect = document.getElementById('campaign_item_id');
@@ -609,41 +1061,70 @@ document.addEventListener('DOMContentLoaded', function() {
     const quantityCampaign = document.getElementById('quantity_campaign');
     const quantityCustom = document.getElementById('quantity_custom');
     const unitDisplay = document.getElementById('unitDisplay');
-    const unitInput = document.getElementById('unit');
+    const showPaymentOptionsBtn = document.getElementById('showPaymentOptionsBtn');
+    const moneyPaymentOptions = document.getElementById('moneyPaymentOptions');
+    const paymentMethodInput = document.getElementById('payment_method_input');
+    const payZaloBtn = document.getElementById('pay-zalopay');
+    const payMomoBtn = document.getElementById('pay-momo');
+    const moneyDonationForm = document.getElementById('moneyDonationForm');
 
-    // Toggle donation type sections
-    donateTypeRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-            if (this.value === 'campaign_item') {
-                campaignItemSection.style.display = 'block';
-                customDonationSection.style.display = 'none';
-                quantityCampaign.name = 'quantity';
-                quantityCustom.name = 'quantity_hidden';
-            } else {
-                campaignItemSection.style.display = 'none';
-                customDonationSection.style.display = 'block';
-                quantityCampaign.name = 'quantity_hidden';
-                quantityCustom.name = 'quantity';
-            }
-            productInfoCard.style.display = 'none';
-        });
-    });
+    const syncDonationMode = function() {
+        const selectedRadio = document.querySelector('input[name="donate_type_selector"]:checked');
+        const selectedValue = selectedRadio ? selectedRadio.value : 'campaign_item';
+        const showMoney = selectedValue === 'money';
+        const showCustom = selectedValue === 'custom';
 
-    // Show product info when campaign item selected
-    campaignItemSelect.addEventListener('change', function() {
-        if (this.value) {
-            const option = this.options[this.selectedIndex];
-            document.getElementById('productName').textContent = option.dataset.name;
-            document.getElementById('productImage').src = option.dataset.image || 'assets/placeholder.png';
-            document.getElementById('productCondition').innerHTML = '<span class=\"badge bg-info\">' + option.dataset.condition + '</span>';
-            document.getElementById('productNeeded').textContent = (option.dataset.needed - option.dataset.received) + ' ' + option.dataset.unit;
-            document.getElementById('productDescription').textContent = option.dataset.description || '';
-            unitDisplay.textContent = option.dataset.unit;
-            productInfoCard.style.display = 'block';
-        } else {
+        if (itemDonationForm) {
+            itemDonationForm.style.display = showMoney ? 'none' : 'block';
+        }
+        if (moneyDonationSection) {
+            moneyDonationSection.style.display = showMoney ? 'block' : 'none';
+        }
+        if (campaignItemSection) {
+            campaignItemSection.style.display = showCustom ? 'none' : 'block';
+        }
+        if (customDonationSection) {
+            customDonationSection.style.display = showCustom ? 'block' : 'none';
+        }
+        if (quantityCampaign) {
+            quantityCampaign.name = showCustom ? 'quantity_hidden' : 'quantity';
+        }
+        if (quantityCustom) {
+            quantityCustom.name = showCustom ? 'quantity' : 'quantity_hidden';
+        }
+        if (itemDonateTypeInput) {
+            itemDonateTypeInput.value = showCustom ? 'custom' : 'campaign_item';
+        }
+        if (!showMoney && moneyPaymentOptions) {
+            moneyPaymentOptions.classList.add('d-none');
+        }
+        if (productInfoCard && (showCustom || showMoney)) {
             productInfoCard.style.display = 'none';
         }
+    };
+
+    donateTypeRadios.forEach(radio => {
+        radio.addEventListener('change', syncDonationMode);
     });
+    syncDonationMode();
+
+    // Show product info when campaign item selected
+    if (campaignItemSelect) {
+        campaignItemSelect.addEventListener('change', function() {
+            if (this.value) {
+                const option = this.options[this.selectedIndex];
+                document.getElementById('productName').textContent = option.dataset.name;
+                document.getElementById('productImage').src = option.dataset.image || 'assets/placeholder.png';
+                document.getElementById('productCondition').innerHTML = '<span class="badge bg-info">' + option.dataset.condition + '</span>';
+                document.getElementById('productNeeded').textContent = (option.dataset.needed - option.dataset.received) + ' ' + option.dataset.unit;
+                document.getElementById('productDescription').textContent = option.dataset.description || '';
+                unitDisplay.textContent = option.dataset.unit;
+                productInfoCard.style.display = 'block';
+            } else {
+                productInfoCard.style.display = 'none';
+            }
+        });
+    }
 
     // Populate city dropdown
     Object.keys(vietnamData).forEach(city => {
@@ -683,44 +1164,79 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Form validation
-    document.getElementById('donationForm').addEventListener('submit', function(e) {
-        const donateType = document.querySelector('input[name=\"donate_type\"]:checked').value;
-        const itemName = document.getElementById('item_name').value.trim();
-        const quantity = document.querySelector('input[name=\"quantity\"]').value;
+    if (showPaymentOptionsBtn && moneyPaymentOptions) {
+        showPaymentOptionsBtn.addEventListener('click', function() {
+            moneyPaymentOptions.classList.remove('d-none');
+        });
+    }
 
-        if (donateType === 'campaign_item' && !document.getElementById('campaign_item_id').value) {
-            e.preventDefault();
-            alert('Vui lòng chọn vật phẩm cần góp');
-            return false;
+    const submitMoneyPayment = function(method) {
+        const donateAmountInput = document.getElementById('donate_amount');
+        if (!moneyDonationForm || !paymentMethodInput || !donateAmountInput) {
+            return;
         }
 
-        if (donateType === 'custom' && !itemName) {
-            e.preventDefault();
-            alert('Vui lòng nhập tên vật phẩm');
-            return false;
+        if (!donateAmountInput.value || Number(donateAmountInput.value) < 1000) {
+            alert('Vui lòng nhập số tiền hợp lệ từ 1.000 VND trở lên.');
+            return;
         }
 
-        if (quantity <= 0) {
-            e.preventDefault();
-            alert('Số lượng phải lớn hơn 0');
-            return false;
-        }
+        paymentMethodInput.value = method;
+        moneyDonationForm.submit();
+    };
 
-        if (!document.getElementById('pickup_address').value.trim()) {
-            e.preventDefault();
-            alert('Vui lòng nhập địa chỉ chi tiết');
-            return false;
-        }
+    if (payZaloBtn) {
+        payZaloBtn.addEventListener('click', function() {
+            submitMoneyPayment('zalopay');
+        });
+    }
 
-        if (!document.getElementById('contact_phone').value.trim()) {
-            e.preventDefault();
-            alert('Vui lòng nhập số điện thoại liên hệ');
-            return false;
-        }
-    });
+    if (payMomoBtn) {
+        payMomoBtn.addEventListener('click', function() {
+            submitMoneyPayment('momo');
+        });
+    }
+
+    if (itemDonationForm) {
+        itemDonationForm.addEventListener('submit', function(e) {
+            const donateType = itemDonateTypeInput ? itemDonateTypeInput.value : 'campaign_item';
+            const itemName = document.getElementById('item_name').value.trim();
+            const quantityInput = document.querySelector('input[name="quantity"]');
+            const quantity = quantityInput ? quantityInput.value : '0';
+
+            if (donateType === 'campaign_item' && !document.getElementById('campaign_item_id').value) {
+                e.preventDefault();
+                alert('Vui lòng chọn vật phẩm cần góp');
+                return false;
+            }
+
+            if (donateType === 'custom' && !itemName) {
+                e.preventDefault();
+                alert('Vui lòng nhập tên vật phẩm');
+                return false;
+            }
+
+            if (Number(quantity) <= 0) {
+                e.preventDefault();
+                alert('Số lượng phải lớn hơn 0');
+                return false;
+            }
+
+            if (!document.getElementById('pickup_address').value.trim()) {
+                e.preventDefault();
+                alert('Vui lòng nhập địa chỉ chi tiết');
+                return false;
+            }
+
+            if (!document.getElementById('contact_phone').value.trim()) {
+                e.preventDefault();
+                alert('Vui lòng nhập số điện thoại liên hệ');
+                return false;
+            }
+        });
+    }
 });
 </script>
-";
+SCRIPT;
 include 'includes/footer.php';
 ?>

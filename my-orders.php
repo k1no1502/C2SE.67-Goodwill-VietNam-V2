@@ -48,7 +48,7 @@ function getCarrierLabel(?string $carrier): string
         'j&t', 'jt', 'jnt' => 'J&T Express',
         'vnpost' => 'VNPost',
         'grab' => 'GrabExpress',
-        default => $carrier ? (string)$carrier : 'Chua chon',
+        default => $carrier ? (string)$carrier : 'Chưa chọn',
     };
 }
 
@@ -56,16 +56,18 @@ function getCarrierStatusMeta(?string $status): array
 {
     $status = strtolower(trim((string)$status));
     return match ($status) {
-        'created' => ['class' => 'secondary', 'text' => 'Da tao van don', 'icon' => 'receipt'],
-        'waiting_pickup' => ['class' => 'warning', 'text' => 'Cho lay hang', 'icon' => 'clock'],
-        'picked_up' => ['class' => 'info', 'text' => 'Da lay hang', 'icon' => 'box-seam'],
-        'in_transit' => ['class' => 'primary', 'text' => 'Dang trung chuyen', 'icon' => 'truck'],
-        'out_for_delivery' => ['class' => 'primary', 'text' => 'Dang giao', 'icon' => 'truck'],
-        'delivered' => ['class' => 'success', 'text' => 'Giao thanh cong', 'icon' => 'house-check'],
-        'failed_delivery' => ['class' => 'danger', 'text' => 'Giao that bai', 'icon' => 'x-circle'],
-        'returning' => ['class' => 'warning', 'text' => 'Dang hoan', 'icon' => 'arrow-return-left'],
-        'returned' => ['class' => 'dark', 'text' => 'Da hoan', 'icon' => 'arrow-return-left'],
-        default => ['class' => 'secondary', 'text' => 'Dang cap nhat', 'icon' => 'info-circle'],
+        'payment_completed' => ['class' => 'success', 'text' => 'Đã thanh toán', 'icon' => 'wallet2'],
+        'payment_pending' => ['class' => 'warning', 'text' => 'Chưa hoàn tất thanh toán', 'icon' => 'wallet2'],
+        'created' => ['class' => 'secondary', 'text' => 'Đã tạo vận đơn', 'icon' => 'receipt'],
+        'waiting_pickup' => ['class' => 'warning', 'text' => 'Chờ lấy hàng', 'icon' => 'clock'],
+        'picked_up' => ['class' => 'info', 'text' => 'Đã lấy hàng', 'icon' => 'box-seam'],
+        'in_transit' => ['class' => 'primary', 'text' => 'Đang trung chuyển', 'icon' => 'truck'],
+        'out_for_delivery' => ['class' => 'primary', 'text' => 'Đang giao', 'icon' => 'truck'],
+        'delivered' => ['class' => 'success', 'text' => 'Giao thành công', 'icon' => 'house-check'],
+        'failed_delivery' => ['class' => 'danger', 'text' => 'Giao thất bại', 'icon' => 'x-circle'],
+        'returning' => ['class' => 'warning', 'text' => 'Đang hoàn', 'icon' => 'arrow-return-left'],
+        'returned' => ['class' => 'dark', 'text' => 'Đã hoàn', 'icon' => 'arrow-return-left'],
+        default => ['class' => 'secondary', 'text' => 'Đang cập nhật', 'icon' => 'info-circle'],
     };
 }
 
@@ -73,15 +75,16 @@ function getLogisticsStatusConfig(): array
 {
     return [
         'steps' => [
-            'created' => ['label' => 'Da tao van don', 'icon' => 'receipt'],
-            'waiting_pickup' => ['label' => 'Cho lay hang', 'icon' => 'clock'],
-            'picked_up' => ['label' => 'Da lay hang', 'icon' => 'box-seam'],
-            'in_transit' => ['label' => 'Dang trung chuyen', 'icon' => 'truck'],
-            'out_for_delivery' => ['label' => 'Dang giao', 'icon' => 'truck'],
-            'delivered' => ['label' => 'Giao thanh cong', 'icon' => 'house-check'],
-            'failed_delivery' => ['label' => 'Giao that bai', 'icon' => 'x-circle'],
-            'returning' => ['label' => 'Dang hoan', 'icon' => 'arrow-return-left'],
-            'returned' => ['label' => 'Da hoan', 'icon' => 'arrow-return-left'],
+            'payment_completed' => ['label' => 'Đã thanh toán', 'icon' => 'wallet2'],
+            'created' => ['label' => 'Đã tạo vận đơn', 'icon' => 'receipt'],
+            'waiting_pickup' => ['label' => 'Chờ lấy hàng', 'icon' => 'clock'],
+            'picked_up' => ['label' => 'Đã lấy hàng', 'icon' => 'box-seam'],
+            'in_transit' => ['label' => 'Đang trung chuyển', 'icon' => 'truck'],
+            'out_for_delivery' => ['label' => 'Đang giao', 'icon' => 'truck'],
+            'delivered' => ['label' => 'Giao thành công', 'icon' => 'house-check'],
+            'failed_delivery' => ['label' => 'Giao thất bại', 'icon' => 'x-circle'],
+            'returning' => ['label' => 'Đang hoàn', 'icon' => 'arrow-return-left'],
+            'returned' => ['label' => 'Đã hoàn', 'icon' => 'arrow-return-left'],
         ],
         'order' => [
             'created',
@@ -109,11 +112,11 @@ function getLegacyStatusConfig(): array
 {
     return [
         'steps' => [
-            'pending' => ['label' => 'Cho xu ly', 'icon' => 'clock'],
-            'confirmed' => ['label' => 'Da xac nhan', 'icon' => 'check-circle'],
-            'shipping' => ['label' => 'Dang giao', 'icon' => 'truck'],
-            'delivered' => ['label' => 'Da giao', 'icon' => 'house-check'],
-            'cancelled' => ['label' => 'Da huy', 'icon' => 'x-circle'],
+            'pending' => ['label' => 'Chờ xử lý', 'icon' => 'clock'],
+            'confirmed' => ['label' => 'Đã xác nhận', 'icon' => 'check-circle'],
+            'shipping' => ['label' => 'Đang giao', 'icon' => 'truck'],
+            'delivered' => ['label' => 'Đã giao', 'icon' => 'house-check'],
+            'cancelled' => ['label' => 'Đã hủy', 'icon' => 'x-circle'],
         ],
         'order' => ['pending', 'confirmed', 'shipping', 'delivered'],
         'rank' => [
@@ -268,30 +271,41 @@ if ($lastMile !== '') {
     switch ($order['status']) {
         case 'pending':
             $statusClass = 'warning';
-            $statusText = 'Cho xu ly';
+            $statusText = 'Chờ xử lý';
             $statusIcon = 'clock';
             break;
         case 'confirmed':
             $statusClass = 'info';
-            $statusText = 'Da xac nhan';
+            $statusText = 'Đã xác nhận';
             $statusIcon = 'check-circle';
             break;
         case 'shipping':
             $statusClass = 'primary';
-            $statusText = 'Dang giao';
+            $statusText = 'Đang giao';
             $statusIcon = 'truck';
             break;
         case 'delivered':
             $statusClass = 'success';
-            $statusText = 'Da giao';
+            $statusText = 'Đã giao';
             $statusIcon = 'house-check';
             break;
         case 'cancelled':
             $statusClass = 'danger';
-            $statusText = 'Da huy';
+            $statusText = 'Đã hủy';
             $statusIcon = 'x-circle';
             break;
     }
+}
+
+$paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+$paymentStatusKey = strtolower(trim((string)($order['payment_status'] ?? '')));
+$isOnlineUnpaid = (float)($order['total_amount'] ?? 0) > 0
+    && in_array($paymentMethodKey, ['bank_transfer', 'momo', 'zalopay'], true)
+    && $paymentStatusKey !== 'paid';
+if ($isOnlineUnpaid) {
+    $statusClass = 'warning';
+    $statusText = 'Chưa hoàn tất thanh toán';
+    $statusIcon = 'wallet2';
 }
 
 $statusConfig = ($order['status'] ?? '') !== 'cancelled'

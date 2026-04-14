@@ -834,6 +834,7 @@ include 'includes/header.php';
     let routeSegments = [];
     let cumulativeDistances = [];
     let totalMeters = 0;
+    const animStateKey = 'gw_tracking_anim_' + String(orderId);
 
     function safeText(value) {
         return (value == null ? '' : String(value));
@@ -1019,6 +1020,34 @@ include 'includes/header.php';
         totalMeters = 0;
     }
 
+    function readAnimState() {
+        try {
+            const raw = localStorage.getItem(animStateKey);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            return parsed;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeAnimState(state) {
+        try {
+            localStorage.setItem(animStateKey, JSON.stringify(state));
+        } catch (e) {
+            // Ignore localStorage write errors.
+        }
+    }
+
+    function clearAnimState() {
+        try {
+            localStorage.removeItem(animStateKey);
+        } catch (e) {
+            // Ignore localStorage remove errors.
+        }
+    }
+
     function pointAtDistance(meters) {
         if (!routeSegments.length || totalMeters <= 0) return null;
         const target = Math.min(Math.max(0, meters), totalMeters);
@@ -1116,6 +1145,7 @@ include 'includes/header.php';
             vehicleLayer.clearLayers();
             vehicleMarker = null;
             cancelAnimation();
+            clearAnimState();
             if (mapStatusEl) mapStatusEl.textContent = '';
             return;
         }
@@ -1172,7 +1202,30 @@ include 'includes/header.php';
 
         const speedMps = (speedKmh * 1000) / 3600;
         animDurationMs = Math.max(1000, (totalMeters / speedMps) * 1000);
-        animStartMs = performance.now();
+
+        const nowWall = Date.now();
+        const nowPerf = performance.now();
+        const saved = readAnimState();
+        let startedAtWallMs = nowWall;
+
+        if (
+            saved
+            && saved.fp === fp
+            && Number.isFinite(saved.startedAtWallMs)
+            && Number.isFinite(saved.durationMs)
+            && saved.durationMs > 0
+        ) {
+            startedAtWallMs = saved.startedAtWallMs;
+            animDurationMs = saved.durationMs;
+        } else {
+            writeAnimState({
+                fp,
+                startedAtWallMs,
+                durationMs: animDurationMs,
+            });
+        }
+
+        animStartMs = nowPerf - Math.max(0, (nowWall - startedAtWallMs));
 
         const start = pointAtDistance(0);
         if (start) ensureVehicleMarker(start.latlng, start.rotation);
@@ -1187,6 +1240,7 @@ include 'includes/header.php';
                 animHandle = requestAnimationFrame(tick);
             } else {
                 animHandle = null;
+                clearAnimState();
                 const end = pointAtDistance(totalMeters);
                 if (end) ensureVehicleMarker(end.latlng, end.rotation);
 

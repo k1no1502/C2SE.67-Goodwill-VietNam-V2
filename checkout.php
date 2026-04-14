@@ -10,6 +10,8 @@ $hasOrderHistoryTable = !empty(Database::fetchAll("SHOW TABLES LIKE 'order_statu
 $googleConfigPath = __DIR__ . '/config/google.php';
 $googleConfig = file_exists($googleConfigPath) ? require $googleConfigPath : [];
 $googleMapsKey = trim((string)($googleConfig['maps_api_key'] ?? ''));
+$paymentConfigPath = __DIR__ . '/config/payment.php';
+$paymentConfig = file_exists($paymentConfigPath) ? require $paymentConfigPath : [];
 
 $success = '';
 $error = '';
@@ -21,6 +23,231 @@ $shipping_phone = $user['phone'] ?? '';
 $shipping_address = $user['address'] ?? '';
 $shipping_note = '';
 $payment_method = 'cod';
+
+function checkoutGetBaseUrl(): string
+{
+    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $scheme = $isHttps ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $scheme . '://' . $host;
+}
+
+function checkoutPostJson(string $url, array $payload): array
+{
+    $ch = curl_init($url);
+    if ($ch === false) {
+        throw new RuntimeException('Không thể khởi tạo kết nối thanh toán.');
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException('Lỗi kết nối cổng thanh toán: ' . $curlError);
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Phản hồi từ cổng thanh toán không hợp lệ.');
+    }
+
+    if ($httpCode >= 400) {
+        $gatewayMessage = trim((string)($decoded['message'] ?? ''));
+        throw new RuntimeException('Cổng thanh toán trả về lỗi HTTP ' . $httpCode . ($gatewayMessage !== '' ? (': ' . $gatewayMessage) : ''));
+    }
+
+    return $decoded;
+}
+
+function checkoutBuildMomoCreateSignature(array $momo, string $amount, string $extraData, string $ipnUrl, string $orderId, string $orderInfo, string $redirectUrl, string $requestId, string $requestType): string
+{
+    $rawHash = 'accessKey=' . $momo['access_key']
+        . '&amount=' . $amount
+        . '&extraData=' . $extraData
+        . '&ipnUrl=' . $ipnUrl
+        . '&orderId=' . $orderId
+        . '&orderInfo=' . $orderInfo
+        . '&partnerCode=' . $momo['partner_code']
+        . '&redirectUrl=' . $redirectUrl
+        . '&requestId=' . $requestId
+        . '&requestType=' . $requestType;
+
+    return hash_hmac('sha256', $rawHash, $momo['secret_key']);
+}
+
+function checkoutExtractOrderIdFromMomoData(?string $orderId, ?string $extraData): int
+{
+    $orderId = (string)$orderId;
+    if (preg_match('/^ORDER(\d+)_/i', $orderId, $m)) {
+        return (int)$m[1];
+    }
+
+    $extraData = trim((string)$extraData);
+    if ($extraData !== '') {
+        $decoded = base64_decode($extraData, true);
+        if ($decoded !== false) {
+            $arr = json_decode($decoded, true);
+            if (is_array($arr) && !empty($arr['order_id'])) {
+                return (int)$arr['order_id'];
+            }
+        }
+    }
+
+    return 0;
+}
+
+function checkoutVerifyMomoResponseSignature(array $payload, string $secretKey): bool
+{
+    $required = ['amount', 'extraData', 'message', 'orderId', 'orderInfo', 'orderType', 'partnerCode', 'payType', 'requestId', 'responseTime', 'resultCode', 'transId', 'signature'];
+    foreach ($required as $key) {
+        if (!array_key_exists($key, $payload)) {
+            return false;
+        }
+    }
+
+    $rawHash = 'accessKey=' . $payload['accessKey']
+        . '&amount=' . $payload['amount']
+        . '&extraData=' . $payload['extraData']
+        . '&message=' . $payload['message']
+        . '&orderId=' . $payload['orderId']
+        . '&orderInfo=' . $payload['orderInfo']
+        . '&orderType=' . $payload['orderType']
+        . '&partnerCode=' . $payload['partnerCode']
+        . '&payType=' . $payload['payType']
+        . '&requestId=' . $payload['requestId']
+        . '&responseTime=' . $payload['responseTime']
+        . '&resultCode=' . $payload['resultCode']
+        . '&transId=' . $payload['transId'];
+
+    $partnerSignature = hash_hmac('sha256', $rawHash, $secretKey);
+    return hash_equals($partnerSignature, (string)$payload['signature']);
+}
+
+if (!empty($_GET['orderId']) && isset($_GET['resultCode']) && !empty($_GET['signature'])) {
+    $momoCfg = $paymentConfig['momo'] ?? [];
+    $secretKey = trim((string)($momoCfg['secret_key'] ?? ''));
+    $resultCode = (string)($_GET['resultCode'] ?? '');
+    $returnParams = $_GET;
+    if (empty($returnParams['accessKey'])) {
+        $returnParams['accessKey'] = trim((string)($momoCfg['access_key'] ?? ''));
+    }
+
+    $failedMessage = '';
+    if ($secretKey === '') {
+        $failedMessage = 'Thiếu cấu hình MoMo secret_key. Vui lòng kiểm tra file config/payment.php.';
+    } elseif (!checkoutVerifyMomoResponseSignature($returnParams, $secretKey)) {
+        $failedMessage = 'Xác thực chữ ký MoMo thất bại.';
+    }
+
+    $returnOrderId = checkoutExtractOrderIdFromMomoData((string)($_GET['orderId'] ?? ''), (string)($_GET['extraData'] ?? ''));
+    if ($failedMessage === '' && $returnOrderId <= 0) {
+        $failedMessage = 'Không xác định được đơn hàng thanh toán MoMo.';
+    }
+
+    if ($failedMessage === '') {
+        $order = Database::fetch('SELECT order_id, user_id, status, shipping_last_mile_status FROM orders WHERE order_id = ?', [$returnOrderId]);
+        if (!$order || (int)$order['user_id'] !== (int)$_SESSION['user_id']) {
+            $failedMessage = 'Không tìm thấy đơn hàng hợp lệ để xác nhận thanh toán.';
+        }
+    }
+
+    if ($failedMessage !== '') {
+        header('Location: payment-failed.php?message=' . urlencode($failedMessage));
+        exit();
+    }
+
+    if ($resultCode === '0') {
+        $paymentStatusColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'payment_status'");
+        $paymentReferenceColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'payment_reference'");
+        $shippingLastMileColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'shipping_last_mile_status'");
+        $shippingLastMileUpdatedAtColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'shipping_last_mile_updated_at'");
+        $updatedAtColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'updated_at'");
+        $statusColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'status'");
+
+        $setClauses = [];
+        $params = [];
+
+        if (!empty($paymentStatusColumn['Type']) && strpos($paymentStatusColumn['Type'], 'enum(') === 0) {
+            preg_match_all("/'([^']+)'/", $paymentStatusColumn['Type'], $statusMatches);
+            $allowedPaymentStatuses = $statusMatches[1] ?? [];
+            if (in_array('paid', $allowedPaymentStatuses, true)) {
+                $setClauses[] = 'payment_status = ?';
+                $params[] = 'paid';
+            }
+        }
+
+        $setClauses[] = 'payment_method = ?';
+        $params[] = 'momo';
+
+        if (!empty($paymentReferenceColumn)) {
+            $setClauses[] = 'payment_reference = ?';
+            $params[] = 'MOMO-' . trim((string)($_GET['transId'] ?? ($_GET['orderId'] ?? '')));
+        }
+
+        $nextStatus = null;
+        if (!empty($statusColumn['Type']) && strpos($statusColumn['Type'], 'enum(') === 0) {
+            preg_match_all("/'([^']+)'/", $statusColumn['Type'], $orderStatusMatches);
+            $allowedOrderStatuses = $orderStatusMatches[1] ?? [];
+            $currentStatus = strtolower((string)($order['status'] ?? ''));
+            if ($currentStatus === 'pending') {
+                if (in_array('confirmed', $allowedOrderStatuses, true)) {
+                    $nextStatus = 'confirmed';
+                } elseif (in_array('processing', $allowedOrderStatuses, true)) {
+                    $nextStatus = 'processing';
+                }
+            }
+        }
+        if ($nextStatus !== null) {
+            $setClauses[] = 'status = ?';
+            $params[] = $nextStatus;
+        }
+
+        if (!empty($shippingLastMileColumn)) {
+            $currentLastMile = strtolower(trim((string)($order['shipping_last_mile_status'] ?? '')));
+            if ($currentLastMile === '' || $currentLastMile === 'payment_pending') {
+                $setClauses[] = 'shipping_last_mile_status = ?';
+                $params[] = 'payment_completed';
+                if (!empty($shippingLastMileUpdatedAtColumn)) {
+                    $setClauses[] = 'shipping_last_mile_updated_at = NOW()';
+                }
+            }
+        }
+
+        if (!empty($updatedAtColumn)) {
+            $setClauses[] = 'updated_at = NOW()';
+        }
+
+        if (!empty($setClauses)) {
+            $params[] = $returnOrderId;
+            Database::execute('UPDATE orders SET ' . implode(', ', $setClauses) . ' WHERE order_id = ?', $params);
+        }
+
+        if ($hasOrderHistoryTable && $nextStatus !== null) {
+            Database::execute(
+                "INSERT INTO order_status_history (order_id, old_status, new_status, note, created_at)
+                 VALUES (?, ?, ?, 'Thanh toán MoMo thành công', NOW())",
+                [$returnOrderId, (string)($order['status'] ?? 'pending'), $nextStatus]
+            );
+        }
+
+        header('Location: order-success.php?order_id=' . $returnOrderId);
+        exit();
+    }
+
+    $message = 'Thanh toán MoMo không thành công: ' . trim((string)($_GET['message'] ?? 'Vui lòng thử lại.'));
+    header('Location: payment-failed.php?message=' . urlencode($message));
+    exit();
+}
 
 // Get cart items with explicit columns (avoid quantity/name collisions)
 $sql = "SELECT 
@@ -83,12 +310,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shipping_address = sanitize($_POST['shipping_address'] ?? $shipping_address);
     $shipping_note = sanitize($_POST['shipping_note'] ?? '');
     $payment_method = sanitize($_POST['payment_method'] ?? $payment_method);
+    $allowedCheckoutMethods = ['cod', 'bank_transfer', 'momo', 'zalopay'];
 
-    $shipping_place_id = trim((string)($_POST['shipping_place_id'] ?? ''));
-    $shipping_lat = $_POST['shipping_lat'] ?? null;
-    $shipping_lng = $_POST['shipping_lng'] ?? null;
-    $shipping_lat = ($shipping_lat === '' || $shipping_lat === null) ? null : (float)$shipping_lat;
-    $shipping_lng = ($shipping_lng === '' || $shipping_lng === null) ? null : (float)$shipping_lng;
+    $shipping_place_id = '';
+    $shipping_lat = null;
+    $shipping_lng = null;
     
     // Validation
     if (empty($shipping_name)) {
@@ -101,8 +327,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Vui lòng nhập địa chỉ giao hàng.';
     } elseif (empty($payment_method)) {
         $error = 'Vui lòng chọn phương thức thanh toán.';
-    } elseif ($googleMapsKey !== '' && ($shipping_place_id === '' || $shipping_lat === null || $shipping_lng === null)) {
-        $error = 'Vui lòng chọn địa chỉ từ gợi ý Google để định vị chính xác.';
+    } elseif (!in_array($payment_method, $allowedCheckoutMethods, true)) {
+        $error = 'Phương thức thanh toán không hợp lệ.';
     } else {
         try {
             Database::beginTransaction();
@@ -116,6 +342,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Kiểm tra schema bảng orders (hỗ trợ cả 2 kiểu: update_schema & orders_system)
             $hasShippingName = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_name'"));
+            $hasShippingMethod = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_method'"));
             $statusColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'status'");
             $allowedStatuses = [];
             if (!empty($statusColumn['Type']) && strpos($statusColumn['Type'], "enum(") === 0) {
@@ -123,7 +350,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $allowedStatuses = $matches[1] ?? [];
             }
             $orderStatus = in_array('pending', $allowedStatuses, true) ? 'pending' : ($allowedStatuses[0] ?? 'pending');
-            $legacyPaymentMethod = $payment_method === 'cod' ? 'cash' : $payment_method;
+            $paymentMethodColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'payment_method'");
+            $allowedPaymentMethods = [];
+            if (!empty($paymentMethodColumn['Type']) && strpos($paymentMethodColumn['Type'], 'enum(') === 0) {
+                preg_match_all("/'([^']+)'/", $paymentMethodColumn['Type'], $methodMatches);
+                $allowedPaymentMethods = $methodMatches[1] ?? [];
+            }
+
+            $paymentMethodToStore = $payment_method;
+            if (!empty($allowedPaymentMethods) && !in_array($paymentMethodToStore, $allowedPaymentMethods, true)) {
+                if (in_array($paymentMethodToStore, ['momo', 'zalopay'], true) && in_array('bank_transfer', $allowedPaymentMethods, true)) {
+                    $paymentMethodToStore = 'bank_transfer';
+                } elseif (in_array('cod', $allowedPaymentMethods, true)) {
+                    $paymentMethodToStore = 'cod';
+                } elseif (in_array('cash', $allowedPaymentMethods, true)) {
+                    $paymentMethodToStore = 'cash';
+                } else {
+                    $paymentMethodToStore = $allowedPaymentMethods[0] ?? $paymentMethodToStore;
+                }
+            }
+
+            $legacyPaymentMethod = $paymentMethodToStore === 'cod' ? 'cash' : $paymentMethodToStore;
+            if (in_array($legacyPaymentMethod, ['momo', 'zalopay'], true)) {
+                $legacyPaymentMethod = 'bank_transfer';
+            }
             $allowedLegacyMethods = ['cash', 'bank_transfer', 'credit_card', 'free'];
             if (!in_array($legacyPaymentMethod, $allowedLegacyMethods, true)) {
                 $legacyPaymentMethod = 'cash';
@@ -132,41 +382,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasShippingName) {
                 // Schema mới: có shipping_name, shipping_note (orders_system.sql)
                 $hasShippingGeo = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_lat'"));
+                $hasShippingPlaceId = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_place_id'"));
                 if ($hasShippingGeo) {
+                    $insertColumns = ['user_id', 'shipping_name', 'shipping_phone', 'shipping_address'];
+                    $insertValues = [
+                        $_SESSION['user_id'],
+                        $shipping_name,
+                        $shipping_phone,
+                        $shipping_address_full,
+                    ];
+                    if ($hasShippingPlaceId) {
+                        $insertColumns[] = 'shipping_place_id';
+                        $insertValues[] = null;
+                    }
+                    $insertColumns[] = 'shipping_lat';
+                    $insertColumns[] = 'shipping_lng';
+                    $insertValues[] = $shipping_lat;
+                    $insertValues[] = $shipping_lng;
+                    if ($hasShippingMethod) {
+                        $insertColumns[] = 'shipping_method';
+                        $insertValues[] = 'delivery';
+                    }
+                    $insertColumns[] = 'shipping_note';
+                    $insertColumns[] = 'payment_method';
+                    $insertColumns[] = 'total_amount';
+                    $insertColumns[] = 'status';
+                    $insertColumns[] = 'created_at';
+                    $insertValues[] = $shipping_note;
+                    $insertValues[] = $paymentMethodToStore;
+                    $insertValues[] = $totalAmount;
+                    $insertValues[] = $orderStatus;
+
+                    $placeholders = implode(', ', array_fill(0, count($insertValues), '?'));
                     Database::execute(
-                        "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address,
-                                             shipping_place_id, shipping_lat, shipping_lng,
-                                             shipping_note, payment_method, total_amount, status, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-                        [
-                            $_SESSION['user_id'],
-                            $shipping_name,
-                            $shipping_phone,
-                            $shipping_address_full,
-                            $shipping_place_id !== '' ? $shipping_place_id : null,
-                            $shipping_lat,
-                            $shipping_lng,
-                            $shipping_note,
-                            $payment_method,
-                            $totalAmount,
-                            $orderStatus
-                        ]
+                        "INSERT INTO orders (" . implode(', ', $insertColumns) . ") VALUES (" . $placeholders . ", NOW())",
+                        $insertValues
                     );
                 } else {
                     Database::execute(
-                        "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address,
-                                             shipping_note, payment_method, total_amount, status, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-                        [
-                            $_SESSION['user_id'],
-                            $shipping_name,
-                            $shipping_phone,
-                            $shipping_address_full,
-                            $shipping_note,
-                            $payment_method,
-                            $totalAmount,
-                            $orderStatus
-                        ]
+                        $hasShippingMethod
+                            ? "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address,
+                                                   shipping_method, shipping_note, payment_method, total_amount, status, created_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
+                            : "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address,
+                                                   shipping_note, payment_method, total_amount, status, created_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                        $hasShippingMethod
+                            ? [
+                                $_SESSION['user_id'],
+                                $shipping_name,
+                                $shipping_phone,
+                                $shipping_address_full,
+                                'delivery',
+                                $shipping_note,
+                                $paymentMethodToStore,
+                                $totalAmount,
+                                $orderStatus
+                            ]
+                            : [
+                                $_SESSION['user_id'],
+                                $shipping_name,
+                                $shipping_phone,
+                                $shipping_address_full,
+                                $shipping_note,
+                                $paymentMethodToStore,
+                                $totalAmount,
+                                $orderStatus
+                            ]
                     );
                 }
             } else {
@@ -259,6 +541,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     [$order_id]
                 );
             }
+
+            if ($payment_method === 'momo' && $totalAmount > 0) {
+                $momoCfg = $paymentConfig['momo'] ?? [];
+                $requiredFields = ['partner_code', 'access_key', 'secret_key', 'endpoint'];
+                foreach ($requiredFields as $field) {
+                    if (trim((string)($momoCfg[$field] ?? '')) === '') {
+                        throw new RuntimeException('Thiếu cấu hình MoMo: ' . $field . '. Vui lòng cập nhật file config/payment.php.');
+                    }
+                }
+
+                $orderId = 'ORDER' . $order_id . '_' . time();
+                $requestId = $orderId;
+                $requestType = trim((string)($momoCfg['request_type'] ?? 'captureWallet'));
+                $redirectUrl = checkoutGetBaseUrl() . '/checkout.php';
+                $ipnUrl = checkoutGetBaseUrl() . '/api/momo_checkout_notify.php';
+                $extraData = base64_encode(json_encode([
+                    'order_id' => $order_id,
+                    'user_id' => (int)$_SESSION['user_id'],
+                ], JSON_UNESCAPED_UNICODE));
+                $orderInfo = 'Thanh toan don hang #' . $order_id;
+                $amountStr = (string)((int)round($totalAmount));
+
+                $signature = checkoutBuildMomoCreateSignature(
+                    $momoCfg,
+                    $amountStr,
+                    $extraData,
+                    $ipnUrl,
+                    $orderId,
+                    $orderInfo,
+                    $redirectUrl,
+                    $requestId,
+                    $requestType
+                );
+
+                $payload = [
+                    'partnerCode' => $momoCfg['partner_code'],
+                    'accessKey' => $momoCfg['access_key'],
+                    'requestId' => $requestId,
+                    'amount' => $amountStr,
+                    'orderId' => $orderId,
+                    'orderInfo' => $orderInfo,
+                    'redirectUrl' => $redirectUrl,
+                    'ipnUrl' => $ipnUrl,
+                    'extraData' => $extraData,
+                    'requestType' => $requestType,
+                    'lang' => 'vi',
+                    'partnerName' => trim((string)($momoCfg['partner_name'] ?? 'Goodwill Vietnam')),
+                    'storeId' => trim((string)($momoCfg['store_id'] ?? 'GoodwillStore')),
+                    'signature' => $signature,
+                ];
+
+                $momoRes = checkoutPostJson($momoCfg['endpoint'], $payload);
+                $payUrl = trim((string)($momoRes['payUrl'] ?? ''));
+                $resultCode = (string)($momoRes['resultCode'] ?? '');
+                if ($payUrl === '' || $resultCode !== '0') {
+                    $msg = trim((string)($momoRes['message'] ?? 'Không thể tạo yêu cầu thanh toán MoMo.'));
+                    if (stripos($msg, 'số tiền tối thiểu') !== false || stripos($msg, 'số tiền tối đa') !== false) {
+                        $msg .= ' Tổng tiền hiện đang gửi sang MoMo là ' . number_format((int)$amountStr) . ' VND.';
+                    }
+                    throw new RuntimeException($msg);
+                }
+
+                Database::commit();
+                header('Location: ' . $payUrl);
+                exit();
+            }
             
             Database::commit();
             
@@ -267,9 +615,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
             
         } catch (Exception $e) {
-            Database::rollback();
+            try {
+                Database::rollback();
+            } catch (Throwable $rollbackError) {
+                // Ignore rollback errors when transaction was not opened.
+            }
             error_log("Checkout error: " . $e->getMessage());
-            $error = 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.';
+            $message = trim((string)$e->getMessage());
+            if ($message === '') {
+                $error = 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.';
+            } else {
+                $error = 'Không thể tạo đơn hàng: ' . $message;
+            }
         }
     }
 }
@@ -277,7 +634,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include 'includes/header.php';
 ?>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
     :root {
         --checkout-ink: #15364a;
@@ -569,6 +925,82 @@ include 'includes/header.php';
         background: linear-gradient(180deg, #f7feff 0%, #edf9fb 100%);
         box-shadow: 0 14px 28px rgba(24,127,152,.14);
     }
+    .payment-suboptions {
+        grid-column: 1 / -1;
+        display: none;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .7rem;
+        margin-top: -.2rem;
+        padding: .8rem;
+        border: 1px dashed var(--checkout-line);
+        border-radius: 16px;
+        background: linear-gradient(180deg, #f9fdfe 0%, #f2fafb 100%);
+    }
+    .payment-suboptions.is-open {
+        display: grid;
+    }
+    .payment-suboption {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        min-height: 60px;
+        padding: .7rem .8rem .7rem 2.4rem;
+        border-radius: 14px;
+        border: 1.5px solid #d7e9ee;
+        background: #fff;
+        cursor: pointer;
+        transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .payment-suboption:hover {
+        border-color: rgba(24,127,152,.38);
+        transform: translateY(-1px);
+    }
+    .payment-suboption .form-check-input {
+        position: absolute;
+        left: .75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        margin: 0;
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--checkout-brand-700);
+    }
+    .payment-suboption-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        flex-shrink: 0;
+        font-size: .95rem;
+        font-weight: 800;
+    }
+    .payment-suboption-icon.zalo {
+        background: linear-gradient(145deg, #0a7cff, #1364c8);
+    }
+    .payment-suboption-icon.momo {
+        background: linear-gradient(145deg, #b10472, #8b055a);
+    }
+    .payment-suboption-title {
+        color: var(--checkout-ink);
+        font-weight: 800;
+        margin: 0;
+        line-height: 1.2;
+        font-size: .9rem;
+    }
+    .payment-suboption-sub {
+        color: var(--checkout-muted);
+        margin: .1rem 0 0;
+        font-size: .78rem;
+    }
+    .payment-suboption:has(.form-check-input:checked) {
+        border-color: var(--checkout-brand-700);
+        box-shadow: 0 10px 18px rgba(24,127,152,.14);
+        background: linear-gradient(180deg, #f8fdff 0%, #eef8fb 100%);
+    }
 
     .checkout-submit {
         min-height: 54px;
@@ -586,30 +1018,6 @@ include 'includes/header.php';
         transform: translateY(-2px);
         box-shadow: 0 18px 32px rgba(24,127,152,.28);
         color: #fff;
-    }
-
-    .checkout-map-wrap {
-        margin-top: 1rem;
-        padding: .9rem;
-        border-radius: 20px;
-        background: linear-gradient(180deg, #f7fcfd 0%, #eef8fa 100%);
-        border: 1px solid var(--checkout-line);
-    }
-    .checkout-map-head {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: .75rem;
-        color: var(--checkout-muted);
-        font-size: .84rem;
-    }
-    #shippingMap {
-        width: 100%;
-        height: 280px;
-        border-radius: 18px;
-        overflow: hidden;
-        border: 1px solid rgba(24,127,152,.16);
-        background: linear-gradient(180deg, #e3f3f6 0%, #f8fcfd 100%);
     }
 
     .summary-card {
@@ -777,6 +1185,9 @@ include 'includes/header.php';
         .payment-grid {
             grid-template-columns: 1fr;
         }
+        .payment-suboptions {
+            grid-template-columns: 1fr;
+        }
         .summary-item {
             grid-template-columns: 46px minmax(0, 1fr);
         }
@@ -784,9 +1195,6 @@ include 'includes/header.php';
             grid-column: 2;
             text-align: left;
             padding-top: .15rem;
-        }
-        #shippingMap {
-            height: 240px;
         }
     }
 </style>
@@ -886,31 +1294,15 @@ include 'includes/header.php';
                                 </div>
                             </div>
                             <label for="shipping_address" class="form-label">Địa chỉ giao hàng *</label>
-                            <input type="hidden" id="shipping_place_id" name="shipping_place_id" value="<?php echo htmlspecialchars($_POST['shipping_place_id'] ?? ''); ?>">
-                            <input type="hidden" id="shipping_lat" name="shipping_lat" value="<?php echo htmlspecialchars($_POST['shipping_lat'] ?? ''); ?>">
-                            <input type="hidden" id="shipping_lng" name="shipping_lng" value="<?php echo htmlspecialchars($_POST['shipping_lng'] ?? ''); ?>">
                             <textarea class="form-control" 
                                       id="shipping_address" 
                                       name="shipping_address" 
                                       rows="3" 
                                       placeholder="Nhập địa chỉ chi tiết (số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố)"
                                       required><?php echo htmlspecialchars($shipping_address ?: $user['address']); ?></textarea>
-                            <?php if ($googleMapsKey !== ''): ?>
-                                <div class="form-text">Gợi ý: gõ và chọn địa chỉ từ danh sách Google để map định vị đúng.</div>
-                            <?php endif; ?>
-                            <?php if ($googleMapsKey === ''): ?>
-                                <div class="form-text">Free: nhập địa chỉ và điều chỉnh ghim trên bản đồ để đúng vị trí (lưu theo tọa độ).</div>
-                            <?php endif; ?>
+                            <div class="form-text">Nhập đầy đủ địa chỉ để hệ thống giao hàng chính xác.</div>
                             <div class="invalid-feedback">
                                 Vui lòng nhập địa chỉ giao hàng.
-                            </div>
-
-                            <div class="checkout-map-wrap">
-                                <div class="checkout-map-head">
-                                    <span><i class="bi bi-geo-alt-fill me-1"></i>Xem trước vị trí giao hàng</span>
-                                    <span>Kéo ghim hoặc chọn từ gợi ý để định vị chính xác hơn</span>
-                                </div>
-                                <div id="shippingMap"></div>
                             </div>
                         </div>
 
@@ -946,13 +1338,41 @@ include 'includes/header.php';
                                            name="payment_method" 
                                            id="bank_transfer" 
                                            value="bank_transfer"
-                                           <?php echo $payment_method === 'bank_transfer' ? 'checked' : ''; ?>>
+                                           <?php echo in_array($payment_method, ['bank_transfer', 'momo', 'zalopay'], true) ? 'checked' : ''; ?>>
                                     <span class="payment-option-icon"><i class="bi bi-bank"></i></span>
                                     <span>
                                         <span class="payment-option-title d-block">Chuyển khoản ngân hàng</span>
                                         <span class="payment-option-sub d-block">Hoàn tất thanh toán online để xử lý đơn nhanh hơn.</span>
                                     </span>
                                 </label>
+                                <div class="payment-suboptions" id="bankSuboptions" aria-hidden="true">
+                                    <label class="payment-suboption" for="zalopay">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="payment_method"
+                                               id="zalopay"
+                                               value="zalopay"
+                                               <?php echo $payment_method === 'zalopay' ? 'checked' : ''; ?>>
+                                        <span class="payment-suboption-icon zalo">Z</span>
+                                        <span>
+                                            <span class="payment-suboption-title d-block">ZaloPay</span>
+                                            <span class="payment-suboption-sub d-block">Ví điện tử ZaloPay.</span>
+                                        </span>
+                                    </label>
+                                    <label class="payment-suboption" for="momo">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="payment_method"
+                                               id="momo"
+                                               value="momo"
+                                               <?php echo $payment_method === 'momo' ? 'checked' : ''; ?>>
+                                        <span class="payment-suboption-icon momo">M</span>
+                                        <span>
+                                            <span class="payment-suboption-title d-block">MoMo</span>
+                                            <span class="payment-suboption-sub d-block">Ví điện tử MoMo.</span>
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
@@ -1063,12 +1483,20 @@ include 'includes/header.php';
 (function() {
     const submitBtn = document.getElementById('submitOrderBtn');
     const radios = document.querySelectorAll('input[name=\"payment_method\"]');
+    const bankSuboptions = document.getElementById('bankSuboptions');
     const updateLabel = () => {
         if (!submitBtn) return;
-        const bankSelected = document.getElementById('bank_transfer')?.checked;
+        const selectedMethod = document.querySelector('input[name=\"payment_method\"]:checked')?.value || 'cod';
+        const onlineMethods = ['bank_transfer', 'momo', 'zalopay'];
+        const bankSelected = onlineMethods.includes(selectedMethod);
         submitBtn.innerHTML = bankSelected
             ? '<i class="bi bi-check-circle me-2"></i>Hoan tat thanh toan'
             : '<i class="bi bi-check-circle me-2"></i>Hoan tat don hang';
+
+        if (bankSuboptions) {
+            bankSuboptions.classList.toggle('is-open', bankSelected);
+            bankSuboptions.setAttribute('aria-hidden', bankSelected ? 'false' : 'true');
+        }
     };
     radios.forEach(r => r.addEventListener('change', updateLabel));
     updateLabel();
@@ -1213,248 +1641,6 @@ include 'includes/header.php';
     init();
 })();
 
-// Google Places Autocomplete (accurate VN address + lat/lng)
-(function () {
-    const apiKey = <?php echo json_encode($googleMapsKey); ?>;
-    if (!apiKey) return;
-
-    const addressEl = document.getElementById('shipping_address');
-    const placeIdEl = document.getElementById('shipping_place_id');
-    const latEl = document.getElementById('shipping_lat');
-    const lngEl = document.getElementById('shipping_lng');
-    const cityEl = document.getElementById('shipping_city');
-    const districtEl = document.getElementById('shipping_district');
-    const wardEl = document.getElementById('shipping_ward');
-    const mapEl = document.getElementById('shippingMap');
-    if (!addressEl || !placeIdEl || !latEl || !lngEl) return;
-
-    let gMap = null;
-    let gMarker = null;
-
-    const updateMap = (lat, lng) => {
-        if (!mapEl || !window.google || !google.maps) return;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        const pos = { lat, lng };
-        if (!gMap) {
-            gMap = new google.maps.Map(mapEl, {
-                center: pos,
-                zoom: 17,
-                mapTypeControl: false,
-                streetViewControl: false,
-                fullscreenControl: false,
-            });
-            gMarker = new google.maps.Marker({ position: pos, map: gMap });
-        } else {
-            gMap.setCenter(pos);
-            if (gMarker) gMarker.setPosition(pos);
-        }
-    };
-
-    let lastCommitted = addressEl.value || '';
-    addressEl.addEventListener('input', () => {
-        if ((addressEl.value || '') !== lastCommitted) {
-            placeIdEl.value = '';
-            latEl.value = '';
-            lngEl.value = '';
-        }
-    });
-
-    const normalize = (s) => (s || '')
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/^thành phố\\s+/i, '')
-        .replace(/^tỉnh\\s+/i, '')
-        .replace(/^quận\\s+/i, '')
-        .replace(/^huyện\\s+/i, '')
-        .replace(/^thị xã\\s+/i, '')
-        .replace(/^phường\\s+/i, '')
-        .replace(/^xã\\s+/i, '');
-
-    const selectByName = (selectEl, name) => {
-        if (!selectEl || !name) return false;
-        const want = normalize(name);
-        const opts = Array.from(selectEl.options || []);
-        const found = opts.find(o => normalize(o.value || o.textContent) === want);
-        if (found) {
-            selectEl.value = found.value;
-            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
-        }
-        return false;
-    };
-
-    const parseComponents = (place) => {
-        const comps = place && Array.isArray(place.address_components) ? place.address_components : [];
-        const get = (type) => {
-            const c = comps.find(x => Array.isArray(x.types) && x.types.includes(type));
-            return c ? (c.long_name || c.short_name || '') : '';
-        };
-        const streetNumber = get('street_number');
-        const route = get('route');
-        const ward = get('administrative_area_level_3') || get('sublocality_level_1') || get('sublocality') || get('neighborhood');
-        const district = get('administrative_area_level_2');
-        const city = get('administrative_area_level_1');
-        const detail = [streetNumber, route].filter(Boolean).join(' ').trim();
-        return { detail, ward, district, city };
-    };
-
-    window.__initGWPlaces = function () {
-        if (!window.google || !google.maps || !google.maps.places) return;
-
-        // Restore preview on reload (e.g. validation errors)
-        const existingLat = parseFloat(latEl.value || '');
-        const existingLng = parseFloat(lngEl.value || '');
-        if (Number.isFinite(existingLat) && Number.isFinite(existingLng)) {
-            updateMap(existingLat, existingLng);
-        }
-
-        const ac = new google.maps.places.Autocomplete(addressEl, {
-            fields: ['place_id', 'geometry', 'address_components', 'formatted_address'],
-            componentRestrictions: { country: ['vn'] },
-            types: ['address'],
-        });
-
-        ac.addListener('place_changed', () => {
-            const place = ac.getPlace();
-            if (!place || !place.place_id || !place.geometry || !place.geometry.location) return;
-
-            placeIdEl.value = place.place_id;
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            latEl.value = lat;
-            lngEl.value = lng;
-            updateMap(lat, lng);
-
-            const c = parseComponents(place);
-            if (c.detail) {
-                addressEl.value = c.detail;
-                lastCommitted = c.detail;
-            } else if (place.formatted_address) {
-                addressEl.value = place.formatted_address;
-                lastCommitted = place.formatted_address;
-            }
-
-            // Best-effort auto select (name match)
-            if (cityEl && districtEl && wardEl) {
-                const waitFor = (el, ms) => new Promise(resolve => {
-                    const start = Date.now();
-                    const t = setInterval(() => {
-                        if ((el.options && el.options.length > 1) || (Date.now() - start) > ms) {
-                            clearInterval(t);
-                            resolve();
-                        }
-                    }, 100);
-                });
-
-                (async () => {
-                    await waitFor(cityEl, 4000);
-                    selectByName(cityEl, c.city);
-                    await waitFor(districtEl, 4000);
-                    selectByName(districtEl, c.district);
-                    await waitFor(wardEl, 4000);
-                    selectByName(wardEl, c.ward);
-                })();
-            }
-        });
-    };
-
-    const scriptId = 'gw-google-places';
-    if (!document.getElementById(scriptId)) {
-        const s = document.createElement('script');
-        s.id = scriptId;
-        s.async = true;
-        s.defer = true;
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&callback=__initGWPlaces`;
-        document.head.appendChild(s);
-    }
-})();
-
-// Free fallback: Leaflet map + manual pin (stores lat/lng). Uses Nominatim only as a helper (user can drag to correct).
-(function () {
-    const apiKey = <?php echo json_encode($googleMapsKey); ?>;
-    if (apiKey) return; // Google mode already handles map
-
-    const mapEl = document.getElementById('shippingMap');
-    const addressEl = document.getElementById('shipping_address');
-    const latEl = document.getElementById('shipping_lat');
-    const lngEl = document.getElementById('shipping_lng');
-    const wardEl = document.getElementById('shipping_ward');
-    const districtEl = document.getElementById('shipping_district');
-    const cityEl = document.getElementById('shipping_city');
-    if (!mapEl || !latEl || !lngEl) return;
-
-    const existingLat = parseFloat(latEl.value || '');
-    const existingLng = parseFloat(lngEl.value || '');
-    const start = (Number.isFinite(existingLat) && Number.isFinite(existingLng))
-        ? [existingLat, existingLng]
-        : [16.047079, 108.206230]; // Đà Nẵng fallback
-
-    const map = L.map(mapEl, { zoomControl: true }).setView(start, 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    const marker = L.marker(start, { draggable: true }).addTo(map);
-
-    const setLatLng = (lat, lng) => {
-        latEl.value = String(lat.toFixed(6));
-        lngEl.value = String(lng.toFixed(6));
-    };
-    setLatLng(start[0], start[1]);
-
-    marker.on('dragend', () => {
-        const p = marker.getLatLng();
-        setLatLng(p.lat, p.lng);
-    });
-    map.on('click', (e) => {
-        marker.setLatLng(e.latlng);
-        setLatLng(e.latlng.lat, e.latlng.lng);
-    });
-
-    const buildQuery = () => {
-        const parts = [
-            (addressEl?.value || '').trim(),
-            (wardEl?.value || '').trim(),
-            (districtEl?.value || '').trim(),
-            (cityEl?.value || '').trim(),
-            'Vietnam'
-        ].filter(Boolean);
-        return parts.join(', ');
-    };
-
-    let geocodeTimer = null;
-    const geocode = async () => {
-        const q = buildQuery();
-        if (!q) return;
-        try {
-            const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=vn&q=' + encodeURIComponent(q);
-            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (!res.ok) return;
-            const data = await res.json();
-            const first = Array.isArray(data) ? data[0] : null;
-            if (!first || !first.lat || !first.lon) return;
-            const lat = parseFloat(first.lat);
-            const lng = parseFloat(first.lon);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-            marker.setLatLng([lat, lng]);
-            map.setView([lat, lng], 16);
-            setLatLng(lat, lng);
-        } catch (e) {}
-    };
-
-    const scheduleGeocode = () => {
-        if (geocodeTimer) clearTimeout(geocodeTimer);
-        geocodeTimer = setTimeout(geocode, 600);
-    };
-
-    addressEl?.addEventListener('blur', geocode);
-    wardEl?.addEventListener('change', scheduleGeocode);
-    districtEl?.addEventListener('change', scheduleGeocode);
-    cityEl?.addEventListener('change', scheduleGeocode);
-})();
 </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <?php include 'includes/footer.php'; ?>
