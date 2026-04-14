@@ -7,6 +7,7 @@ Quan ly test account va tu dong dang nhap
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -22,6 +23,9 @@ PASSWORD = "123456"
 
 # Test accounts
 TEST_ACCOUNTS = [f"test{i}" for i in range(1, 11)]
+
+# Local Chrome profile storage for each test account
+PROFILES_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chrome_profiles")
 
 
 class TestAccountManager:
@@ -172,6 +176,15 @@ class TestAccountManager:
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--no-default-browser-check")
+
+            # Create/use dedicated Chrome profile for the selected test account
+            account_profile_dir = os.path.join(PROFILES_BASE_DIR, account.lower())
+            os.makedirs(account_profile_dir, exist_ok=True)
+            chrome_options.add_argument(f"--user-data-dir={account_profile_dir}")
+
+            self.update_status(f"Đang mở Chrome profile: {account}")
             
             # Initialize WebDriver via Selenium Manager (auto-resolve correct driver)
             self.driver = webdriver.Chrome(options=chrome_options)

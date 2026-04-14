@@ -110,6 +110,83 @@ if ($tableExists['count'] > 0) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="../assets/css/style.css" rel="stylesheet">
+    <style>
+        :root {
+            --brand-700: #0e7490;
+            --brand-500: #06b6d4;
+            --ink-900: #23324a;
+        }
+
+        body {
+            background: #f3f9fc;
+        }
+
+        .settings-topbar {
+            background: transparent;
+            border: 0;
+            border-radius: 16px;
+            padding: 0.15rem 0 0.25rem;
+            color: #0f172a;
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
+            box-shadow: none;
+        }
+
+        .settings-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .settings-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .settings-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .settings-topbar-title {
+            margin: 0;
+            color: #0f172a;
+            font-weight: 900;
+            letter-spacing: 0.1px;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            line-height: 1.08;
+        }
+
+        .settings-topbar-sub {
+            margin: 0.35rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            line-height: 1.25;
+        }
+
+        @media (max-width: 767.98px) {
+            .settings-topbar { padding: 0.05rem 0 0.25rem; }
+            .settings-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+            .settings-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .settings-head-icon i { font-size: 1.45rem; }
+            .settings-topbar-sub { font-size: 1rem; }
+        }
+    </style>
 </head>
 <body>
     <div class="container-fluid">
@@ -117,8 +194,16 @@ if ($tableExists['count'] > 0) {
             <?php include 'includes/sidebar.php'; ?>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2"><i class="bi bi-gear me-2"></i>Cài đặt hệ thống</h1>
+                <div class="settings-topbar">
+                    <div class="settings-head">
+                        <div class="settings-head-icon">
+                            <i class="bi bi-gear"></i>
+                        </div>
+                        <div>
+                            <h1 class="settings-topbar-title">Cài đặt hệ thống</h1>
+                            <p class="settings-topbar-sub">Quản lý cấu hình nền tảng, thông tin liên hệ và hồ sơ quản trị viên.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <?php echo displayFlashMessages(); ?>

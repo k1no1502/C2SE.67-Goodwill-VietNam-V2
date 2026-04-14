@@ -144,48 +144,74 @@ $activeUsersCount = count($activeUsers);
         }
 
         .notifications-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
-            border-radius: 22px;
-            padding: 1rem 1.45rem;
+            background: transparent;
+            border: 0;
+            border-radius: 16px;
+            padding: 0.15rem 0 0.25rem;
             color: #0f172a;
-            margin-top: 0.35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
+            box-shadow: none;
+        }
+
+        .notifications-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .notifications-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .notifications-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
         }
 
         .notifications-topbar h1 {
-            font-size: clamp(2rem, 3vw, 3.4rem);
-            font-weight: 800;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
             margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            line-height: 1.05;
-            letter-spacing: .2px;
+            line-height: 1.08;
+            letter-spacing: .1px;
             color: #0f172a;
         }
 
         .notifications-topbar p {
-            margin-top: 0.45rem;
+            margin-top: 0.35rem;
             margin-bottom: 0;
-            font-size: clamp(0.95rem, 1.2vw, 1.08rem);
-            color: #64748b;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            color: #58718a;
+            line-height: 1.25;
             opacity: 1;
         }
 
-        .notifications-topbar h1 i {
-            font-size: 0.9em;
-        }
-
         @media (max-width: 767.98px) {
-            .notifications-topbar {
-                padding: 1rem;
+            .notifications-topbar { padding: 0.05rem 0 0.25rem; }
+
+            .notifications-head {
+                gap: 0.72rem;
+                align-items: flex-start;
             }
 
-            .notifications-topbar h1 {
-                font-size: 2rem;
+            .notifications-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
             }
+
+            .notifications-head-icon i { font-size: 1.45rem; }
+            .notifications-topbar p { font-size: 1rem; }
         }
 
         .overview-grid {
@@ -375,8 +401,15 @@ $activeUsersCount = count($activeUsers);
             ?>
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="notifications-topbar">
-                    <h1><i class="bi bi-broadcast-pin me-2"></i>Trung tâm thông báo</h1>
-                    <p>Tạo thông báo chuyên nghiệp cho toàn hệ thống, gửi ngay hoặc lên lịch theo thời điểm bạn mong muốn.</p>
+                    <div class="notifications-head">
+                        <div class="notifications-head-icon">
+                            <i class="bi bi-broadcast-pin"></i>
+                        </div>
+                        <div>
+                            <h1>Trung tâm thông báo</h1>
+                            <p>Tạo thông báo chuyên nghiệp cho toàn hệ thống, gửi ngay hoặc lên lịch theo thời điểm bạn mong muốn.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <?php if (!empty($errors)): ?>

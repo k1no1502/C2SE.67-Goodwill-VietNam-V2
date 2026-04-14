@@ -1,8 +1,8 @@
 <?php
 return [
     'warehouse' => [
-        'name' => 'Kho chính Goodwill',
-        'address' => '328 Ngô Quyền, Sơn Trà, Đà Nẵng, Việt Nam',
+        'name' => 'Cửa hàng & Kho Goodwill Việt Nam',
+        'address' => '328 Ngô Quyền, Mân Thái, Quận Sơn Trà, Đà Nẵng, Việt Nam',
         'city' => 'Đà Nẵng',
         'district' => 'Sơn Trà',
         'place_id' => null,
@@ -128,7 +128,7 @@ return [
         [
             'code' => 'son_tra_last_mile',
             'name' => 'Kho giao Sơn Trà',
-            'address' => '328 Ngô Quyền, Sơn Trà, Đà Nẵng, Việt Nam',
+            'address' => '328 Ngô Quyền, Mân Thái, Quận Sơn Trà, Đà Nẵng, Việt Nam',
             'city' => 'Đà Nẵng',
             'district' => 'Sơn Trà',
             'lat' => 16.047079,

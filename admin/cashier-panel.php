@@ -4,165 +4,76 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 requireStaffOrAdmin();
-
-// Staff cashier only (admin is always allowed)
 if (!isAdmin() && getStaffPanelKey() !== 'cashier') {
     header('Location: ../staff-panel.php');
     exit();
 }
 
-$pageTitle = 'Panel Thu ngan';
+$pageTitle = 'Kho hàng';
 $panelType = 'cashier';
-$error = '';
-$success = '';
-$receipt = null;
+
+if (isset($_GET['stock_snapshot']) && $_GET['stock_snapshot'] === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        $stockRows = Database::fetchAll(
+            "SELECT i.item_id,
+                    i.status,
+                    i.is_for_sale,
+                    GREATEST(
+                        i.quantity - COALESCE((SELECT SUM(quantity) FROM cart WHERE item_id = i.item_id), 0),
+                        0
+                    ) AS available_quantity
+             FROM inventory i
+             WHERE i.is_for_sale = 1"
+        );
+
+        $snapshot = [];
+        foreach ($stockRows as $row) {
+            $snapshot[(int)$row['item_id']] = [
+                'available_quantity' => (int)($row['available_quantity'] ?? 0),
+                'status' => (string)($row['status'] ?? ''),
+                'is_for_sale' => (int)($row['is_for_sale'] ?? 0),
+            ];
+        }
+        echo json_encode(['success' => true, 'data' => $snapshot], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Cannot load stock snapshot']);
+    }
+    exit();
+}
 
 $products = Database::fetchAll(
-    "SELECT i.item_id, i.name, i.quantity, i.sale_price, i.price_type, i.images,
+    "SELECT i.item_id, i.quantity, i.name, i.sale_price, i.status, i.images,
+            GREATEST(
+                i.quantity - COALESCE((SELECT SUM(quantity) FROM cart WHERE item_id = i.item_id), 0),
+                0
+            ) AS available_quantity,
             c.name AS category_name
      FROM inventory i
      LEFT JOIN categories c ON i.category_id = c.category_id
-     WHERE i.status = 'available' AND i.is_for_sale = 1 AND i.quantity > 0
-     ORDER BY i.updated_at DESC, i.item_id DESC
-     LIMIT 250"
+     WHERE i.is_for_sale = 1
+     ORDER BY i.updated_at DESC, i.item_id DESC"
 );
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $csrf = $_POST['csrf_token'] ?? '';
-    if (!validateCSRFToken($csrf)) {
-        $error = 'Yeu cau khong hop le. Vui long thu lai.';
+$totalProducts = count($products);
+$inStock = 0;
+$outOfStock = 0;
+
+foreach ($products as &$p) {
+    $imgs = json_decode((string)($p['images'] ?? '[]'), true);
+    $p['img_url'] = !empty($imgs)
+        ? resolveDonationImageUrl((string)$imgs[0])
+        : 'uploads/donations/placeholder-default.svg';
+
+    $qty = (int)($p['available_quantity'] ?? 0);
+    if ($qty > 0 && (string)$p['status'] !== 'sold') {
+        $inStock++;
     } else {
-        $rawCart = $_POST['cart_json'] ?? '[]';
-        $cart = json_decode($rawCart, true);
-        $paymentMethod = $_POST['payment_method'] ?? 'cash';
-        $customerName = trim((string)($_POST['customer_name'] ?? 'Khach mua tai quay'));
-
-        if (!is_array($cart) || empty($cart)) {
-            $error = 'Gio hang dang rong.';
-        } elseif (!in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
-            $error = 'Phuong thuc thanh toan khong hop le.';
-        } else {
-            try {
-                Database::beginTransaction();
-
-                $normalizedPayment = $paymentMethod === 'cash' ? 'cod' : 'bank_transfer';
-                $totalAmount = 0;
-                $lineItems = [];
-
-                foreach ($cart as $line) {
-                    $itemId = (int)($line['item_id'] ?? 0);
-                    $qty = (int)($line['quantity'] ?? 0);
-                    if ($itemId <= 0 || $qty <= 0) {
-                        continue;
-                    }
-
-                    $item = Database::fetch(
-                        "SELECT item_id, name, quantity, sale_price, is_for_sale, status
-                         FROM inventory
-                         WHERE item_id = ?
-                         FOR UPDATE",
-                        [$itemId]
-                    );
-
-                    if (!$item || (int)$item['quantity'] < $qty || (int)$item['is_for_sale'] !== 1 || $item['status'] !== 'available') {
-                        throw new Exception('San pham #' . $itemId . ' khong du ton kho hoac khong con ban.');
-                    }
-
-                    $price = (float)($item['sale_price'] ?? 0);
-                    $subtotal = $price * $qty;
-                    $totalAmount += $subtotal;
-
-                    $lineItems[] = [
-                        'item_id' => (int)$item['item_id'],
-                        'item_name' => (string)$item['name'],
-                        'quantity' => $qty,
-                        'price' => $price,
-                        'subtotal' => $subtotal,
-                    ];
-                }
-
-                if (empty($lineItems)) {
-                    throw new Exception('Khong co san pham hop le de thanh toan.');
-                }
-
-                Database::execute(
-                    "INSERT INTO orders (
-                        user_id, shipping_name, shipping_phone, shipping_address,
-                        shipping_method, shipping_note,
-                        payment_method, payment_status,
-                        total_amount, total_items, status
-                    ) VALUES (?, ?, ?, ?, 'pickup', ?, ?, 'paid', ?, ?, 'delivered')",
-                    [
-                        (int)($_SESSION['user_id'] ?? 0),
-                        $customerName !== '' ? $customerName : 'Khach mua tai quay',
-                        null,
-                        'Mua tai quay Goodwill Vietnam',
-                        'Ban tai quay (POS thu ngan)',
-                        $normalizedPayment,
-                        $totalAmount,
-                        array_sum(array_column($lineItems, 'quantity')),
-                    ]
-                );
-
-                $orderId = (int)Database::lastInsertId();
-
-                foreach ($lineItems as $line) {
-                    Database::execute(
-                        "INSERT INTO order_items (order_id, item_id, item_name, quantity, price, price_type, subtotal)
-                         VALUES (?, ?, ?, ?, ?, 'normal', ?)",
-                        [
-                            $orderId,
-                            $line['item_id'],
-                            $line['item_name'],
-                            $line['quantity'],
-                            $line['price'],
-                            $line['subtotal'],
-                        ]
-                    );
-
-                    Database::execute(
-                        "UPDATE inventory
-                         SET quantity = quantity - ?,
-                             status = CASE WHEN quantity - ? <= 0 THEN 'sold' ELSE status END,
-                             is_for_sale = CASE WHEN quantity - ? <= 0 THEN 0 ELSE is_for_sale END,
-                             updated_at = NOW()
-                         WHERE item_id = ?",
-                        [$line['quantity'], $line['quantity'], $line['quantity'], $line['item_id']]
-                    );
-                }
-
-                logActivity((int)($_SESSION['user_id'] ?? 0), 'cashier_checkout', 'Checkout bill #' . $orderId . ' at cashier panel');
-
-                Database::commit();
-
-                $success = 'Da tao hoa don va thanh toan thanh cong.';
-                $receipt = [
-                    'order_id' => $orderId,
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'payment_method' => $paymentMethod,
-                    'customer_name' => $customerName !== '' ? $customerName : 'Khach mua tai quay',
-                    'items' => $lineItems,
-                    'total_amount' => $totalAmount,
-                ];
-            } catch (Exception $e) {
-                Database::rollback();
-                $error = 'Khong the thanh toan: ' . $e->getMessage();
-            }
-        }
+        $outOfStock++;
     }
 }
-
-$todayBills = Database::fetch(
-    "SELECT COUNT(*) AS c
-     FROM orders
-     WHERE DATE(created_at) = CURDATE() AND shipping_note = 'Ban tai quay (POS thu ngan)'"
-);
-$todayRevenue = Database::fetch(
-    "SELECT COALESCE(SUM(total_amount), 0) AS total
-     FROM orders
-     WHERE DATE(created_at) = CURDATE() AND shipping_note = 'Ban tai quay (POS thu ngan)'"
-);
-$availableCount = Database::fetch("SELECT COUNT(*) AS c FROM inventory WHERE status = 'available' AND is_for_sale = 1 AND quantity > 0");
+unset($p);
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -173,96 +84,403 @@ $availableCount = Database::fetch("SELECT COUNT(*) AS c FROM inventory WHERE sta
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="../assets/css/style.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        body { background: #f3f9fc; }
-        .admin-content { padding-top: 1rem; padding-bottom: 1.5rem; }
-
-        .dashboard-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
-            border-radius: 22px;
-            padding: 1rem 1.45rem;
-            margin-top: .35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8,74,92,.07);
+        :root {
+            --teal: #0b728c;
+            --teal-dk: #084f63;
+            --bg: #f0f4f8;
+            --border: #d7edf3;
+            --text: #0f172a;
+            --muted: #64748b;
         }
-        .dashboard-topbar h1 {
+        body { background: var(--bg); }
+        .admin-content { padding: 1rem 1.2rem 2rem; }
+
+        .topbar {
+            background: transparent;
+            border-radius: 16px;
+            padding: .15rem 0 .25rem;
+            margin-bottom: .9rem;
+            display: flex;
+            align-items: center;
+            gap: .9rem;
+        }
+        .topbar-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            flex-shrink: 0;
+            box-shadow: 0 10px 20px rgba(8,74,92,.23);
+        }
+        .topbar-icon i { font-size: 2rem; line-height: 1; }
+        .topbar-text h1 {
             margin: 0;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
             color: #0f172a;
-            font-weight: 800;
-            font-size: clamp(1.6rem, 2.5vw, 2.4rem);
             line-height: 1.1;
         }
-        .dashboard-note { color: #64748b; font-size: .95rem; margin-top: .4rem; }
-
-        .stat-card {
-            border: 1px solid #d7edf3;
-            border-radius: 16px;
-            box-shadow: 0 10px 24px rgba(8,74,92,.08);
-            background: #fff;
+        .topbar-text p {
+            margin: .35rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.5vw, 2rem);
+            line-height: 1.25;
         }
-        .stat-card .card-body { padding: 1rem 1.1rem; }
-        .stat-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: #0b728c; margin-bottom: .28rem; }
-        .stat-value { font-size: 1.65rem; font-weight: 800; color: #0f172a; line-height: 1; }
+        @media (max-width: 767.98px) {
+            .topbar {
+                align-items: flex-start;
+                gap: .72rem;
+            }
+            .topbar-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .topbar-icon i { font-size: 1.45rem; }
+            .topbar-text p { font-size: 1rem; }
+        }
 
-        .dashboard-card {
-            border: 1px solid #d7edf3;
-            border-radius: 16px;
-            box-shadow: 0 10px 24px rgba(8,74,92,.08);
+        .stats-row { margin-bottom: .85rem; }
+        .stat-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fff;
+            padding: .75rem .9rem;
+            box-shadow: 0 3px 9px rgba(8,74,92,.07);
+            height: 100%;
+        }
+        .stat-label { color: var(--muted); font-size: .78rem; margin-bottom: .2rem; }
+        .stat-value { color: var(--text); font-size: 1.35rem; font-weight: 800; line-height: 1.1; }
+
+        .layout-grid { display: grid; grid-template-columns: 1fr 330px; gap: .8rem; }
+        .card-box {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 3px 10px rgba(8,74,92,.07);
+            overflow: hidden;
+        }
+        .card-head {
+            border-bottom: 1px solid var(--border);
+            padding: .7rem .95rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .6rem;
+            flex-wrap: wrap;
+        }
+        .card-head h6 { margin: 0; color: var(--teal); font-size: .95rem; font-weight: 700; }
+
+        .search-wrap { position: relative; width: 280px; max-width: 100%; }
+        .search-wrap i {
+            position: absolute;
+            left: .66rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #93a4b2;
+            font-size: .84rem;
+        }
+        .search-wrap input {
+            width: 100%;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            padding: .42rem .6rem .42rem 2rem;
+            font-size: .86rem;
+        }
+
+        .products-grid {
+            padding: .8rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+            gap: .75rem;
+            max-height: calc(100vh - 260px);
+            overflow-y: auto;
+        }
+
+        .product-card {
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
             overflow: hidden;
             background: #fff;
+            transition: .16s ease;
         }
-        .dashboard-card-header {
-            background: linear-gradient(140deg, #fbfeff 0%, #edf8fb 100%);
-            border-bottom: 1px solid #d7edf3;
-            padding: .82rem 1rem;
+        .product-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(8,74,92,.13);
+            border-color: var(--teal);
         }
-        .dashboard-card-title { font-weight: 700; color: #0b728c; margin: 0; }
+        .product-img {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            background: #eef4f7;
+        }
+        .product-body { padding: .58rem .62rem .66rem; }
+        .product-name {
+            font-size: .82rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: .2rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .product-cat { font-size: .7rem; color: #8a9cab; margin-bottom: .28rem; }
+        .product-price { color: var(--teal); font-size: .94rem; font-weight: 800; }
+        .stock-badge {
+            display: inline-block;
+            margin-top: .2rem;
+            font-size: .7rem;
+            border-radius: 999px;
+            padding: .08rem .45rem;
+            font-weight: 700;
+        }
+        .stock-ok { background: #e8fff3; color: #047857; }
+        .stock-out { background: #fff0f0; color: #b91c1c; }
 
-        .product-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: .85rem;
-        }
-        .product-card {
-            border: 1px solid #d7edf3;
-            border-radius: 14px;
-            padding: .75rem;
-            background: #fff;
-        }
-        .product-title { font-weight: 700; color: #0f172a; margin-bottom: .25rem; }
-        .product-meta { color: #64748b; font-size: .85rem; margin-bottom: .45rem; }
-        .barcode-wrap {
-            border: 1px dashed #9fd8e6;
-            border-radius: 10px;
-            background: #f8fdff;
-            padding: .35rem;
+        .barcode-box {
+            margin: .38rem 0;
+            border: 1px dashed #c8dfe8;
+            border-radius: 9px;
+            background: #f8fcfe;
+            padding: .3rem;
             text-align: center;
-            margin-bottom: .55rem;
         }
+        .barcode-svg { width: 100%; max-width: 150px; height: 44px; }
+        .barcode-code { font-size: .68rem; color: #6a8293; font-weight: 700; letter-spacing: .4px; }
 
-        .cart-table td, .cart-table th { vertical-align: middle; font-size: .88rem; }
-        .qty-input { width: 72px; }
-        .scanner-box {
-            border: 1px dashed #9fd8e6;
-            border-radius: 12px;
-            padding: .8rem;
-            background: #f9fdff;
-        }
-
-        .receipt-print {
+        .actions { display: grid; grid-template-columns: 1fr; gap: .35rem; }
+        .btn-smx {
+            border-radius: 8px;
+            border: 1px solid #c7deea;
             background: #fff;
-            border: 1px dashed #c5d9df;
-            border-radius: 12px;
-            padding: 1rem;
+            color: var(--teal);
+            font-size: .75rem;
+            font-weight: 700;
+            padding: .31rem .42rem;
+        }
+        .btn-smx:hover { background: #eaf6fb; }
+
+        .scan-body { padding: .78rem .9rem .88rem; }
+        .scan-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; margin-bottom: .54rem; }
+        .scan-btn {
+            border: 1px solid #c7deea;
+            border-radius: 9px;
+            background: #fff;
+            color: var(--teal);
+            font-size: .76rem;
+            font-weight: 700;
+            padding: .4rem .45rem;
+        }
+        .scan-btn.primary {
+            background: linear-gradient(135deg, var(--teal), var(--teal-dk));
+            color: #fff;
+            border-color: transparent;
+        }
+        .scan-btn:disabled { opacity: .58; }
+
+        .scan-manual { display: flex; gap: .35rem; margin-bottom: .45rem; }
+        .scan-manual input {
+            flex: 1;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: .82rem;
+            padding: .35rem .55rem;
+        }
+        .scan-manual button {
+            border: 1px solid #c7deea;
+            border-radius: 8px;
+            background: #fff;
+            color: var(--teal);
+            font-size: .76rem;
+            font-weight: 700;
+            padding: 0 .68rem;
         }
 
-        @media print {
-            body * { visibility: hidden; }
-            #receiptArea, #receiptArea * { visibility: visible; }
-            #receiptArea { position: absolute; left: 0; top: 0; width: 100%; }
+        /* ── Scanner reader + overlay ── */
+        .scan-reader-wrap {
+            position: relative;
+            display: none;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: #f3fafc;
+        }
+        .scan-reader-wrap.scanning { display: block; }
+        #scannerReader {
+            display: block;
+            min-height: 170px;
+            width: 100%;
+        }
+        /* Smooth zoom on video when camera is active */
+        #scannerReader video {
+            transition: transform .35s ease;
+        }
+        #scannerReader.barcode-found video {
+            transform: scale(1.05);
+        }
+
+        /* Overlay painted on top of video */
+        .scan-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 20;
+            border-radius: 10px;
+            overflow: visible;
+        }
+
+        /* Dark side vignette to focus on centre */
+        .scan-overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 80% 55% at 50% 50%,
+                transparent 45%, rgba(0,0,0,.32) 100%);
+            border-radius: 10px;
+        }
+
+        /* Animated laser line */
+        .scan-laser {
+            position: absolute;
+            left: 12%;
+            right: 12%;
+            height: 2px;
+            top: 35%;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                rgba(0,220,255,.85) 15%,
+                #00dcff 50%,
+                rgba(0,220,255,.85) 85%,
+                transparent 100%);
+            box-shadow: 0 0 7px 2px rgba(0,220,255,.5);
+            border-radius: 2px;
+            animation: laserSweep 2s ease-in-out infinite;
+        }
+
+        @keyframes laserSweep {
+            0%   { top: 28%; opacity: .75; }
+            50%  { top: 62%; opacity: 1;   }
+            100% { top: 28%; opacity: .75; }
+        }
+
+        /* Corner bracket shared base */
+        .scan-corner {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            transition: border-color .2s;
+        }
+        .scan-corner::before,
+        .scan-corner::after {
+            content: '';
+            position: absolute;
+            background: #00dcff;
+            box-shadow: 0 0 6px rgba(0,220,255,.7);
+            border-radius: 1.5px;
+            transition: background .2s, box-shadow .2s;
+        }
+        .scan-corner::before { width: 22px; height: 3px; }
+        .scan-corner::after  { width: 3px;  height: 22px; }
+
+        .scan-corner.tl { top:24%; left:9%; }
+        .scan-corner.tl::before { top:0;    left:0; }
+        .scan-corner.tl::after  { top:0;    left:0; }
+
+        .scan-corner.tr { top:24%; right:9%; }
+        .scan-corner.tr::before { top:0;    right:0; left:auto; }
+        .scan-corner.tr::after  { top:0;    right:0; left:auto; }
+
+        .scan-corner.bl { bottom:24%; left:9%; }
+        .scan-corner.bl::before { bottom:0; left:0; top:auto; }
+        .scan-corner.bl::after  { bottom:0; left:0; top:auto; }
+
+        .scan-corner.br { bottom:24%; right:9%; }
+        .scan-corner.br::before { bottom:0; right:0; left:auto; top:auto; }
+        .scan-corner.br::after  { bottom:0; right:0; left:auto; top:auto; }
+
+        .scan-reader-wrap.scanning .scan-corner::before,
+        .scan-reader-wrap.scanning .scan-corner::after {
+            animation: cornerPulse 2.2s ease-in-out infinite;
+        }
+        @keyframes cornerPulse {
+            0%,100% { background: #00dcff; box-shadow: 0 0 5px rgba(0,220,255,.6); }
+            50%      { background: #52f2ff; box-shadow: 0 0 10px rgba(82,242,255,.9); }
+        }
+
+        .scan-reader-wrap.barcode-found .scan-corner::before,
+        .scan-reader-wrap.barcode-found .scan-corner::after {
+            background: #22c55e !important;
+            box-shadow: 0 0 10px rgba(34,197,94,.9) !important;
+            animation: none;
+        }
+        .scan-reader-wrap.barcode-found .scan-laser {
+            background: linear-gradient(90deg,
+                transparent 0%, rgba(34,197,94,.9) 15%,
+                #22c55e 50%, rgba(34,197,94,.9) 85%, transparent 100%) !important;
+            box-shadow: 0 0 10px 3px rgba(34,197,94,.55) !important;
+            animation: none;
+        }
+
+        .scan-success-flash {
+            position: absolute;
+            inset: 0;
+            border-radius: 10px;
+            background: transparent;
+            pointer-events: none;
+        }
+        .scan-success-flash.active {
+            animation: greenFlash .45s ease-out forwards;
+        }
+        @keyframes greenFlash {
+            0%   { background: rgba(34,197,94,.38); }
+            100% { background: transparent; }
+        }
+
+        .scan-badge-pop {
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%) scale(.7);
+            background: rgba(22,163,74,.92);
+            color: #fff;
+            font-size: .78rem;
+            font-weight: 700;
+            border-radius: 20px;
+            padding: .28rem .9rem;
+            pointer-events: none;
+            opacity: 0;
+            white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(22,163,74,.35);
+            z-index: 30;
+        }
+        .scan-badge-pop.active {
+            animation: badgePop .65s ease-out forwards;
+        }
+        @keyframes badgePop {
+            0%   { opacity: 1; transform: translateX(-50%) scale(1);    bottom:12%; }
+            65%  { opacity: 1; transform: translateX(-50%) scale(1.06); bottom:18%; }
+            100% { opacity: 0; transform: translateX(-50%) scale(.9);   bottom:22%; }
+        }
+
+        .scan-status {
+            margin-top: .5rem;
+            font-size: .76rem;
+            border-radius: 8px;
+            padding: .35rem .52rem;
+            background: #eef8fc;
+            color: var(--teal);
+            min-height: 30px;
+        }
+
+        @media (max-width: 1200px) {
+            .layout-grid { grid-template-columns: 1fr; }
+            .products-grid { max-height: none; }
         }
     </style>
 </head>
@@ -272,426 +490,460 @@ $availableCount = Database::fetch("SELECT COUNT(*) AS c FROM inventory WHERE sta
         <?php include 'includes/staff-sidebar.php'; ?>
 
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
-            <div class="dashboard-topbar d-flex justify-content-between flex-wrap align-items-center gap-3">
-                <div>
-                    <h1><i class="bi bi-upc-scan me-2"></i>Panel Thu ngan</h1>
-                    <div class="dashboard-note">Ban hang tai quay, quet ma vach va xuat bill ngay.</div>
+            <div class="topbar">
+                <div class="topbar-icon">
+                    <i class="bi bi-upc-scan"></i>
                 </div>
-                <div>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="printReceiptBtnTop" style="display:none;">
-                        <i class="bi bi-printer me-1"></i>In bill
-                    </button>
+                <div class="topbar-text">
+                    <h1>Kho hàng mã vạch</h1>
+                    <p>Sản phẩm + mã vạch Goodwill Vietnam • Quét mã để thêm nhanh vào giỏ</p>
                 </div>
             </div>
 
-            <?php if ($error !== ''): ?>
-                <div class="alert alert-danger"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
-            <?php endif; ?>
-            <?php if ($success !== ''): ?>
-                <div class="alert alert-success"><?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?></div>
-            <?php endif; ?>
-
-            <div class="row mb-4">
-                <div class="col-xl-4 col-md-6 mb-3">
-                    <div class="card stat-card h-100"><div class="card-body"><div class="stat-label">Hoa don hom nay</div><div class="stat-value"><?php echo number_format((int)($todayBills['c'] ?? 0)); ?></div></div></div>
+            <div class="row g-2 stats-row">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Tổng sản phẩm</div>
+                        <div class="stat-value" id="statTotalProducts"><?php echo (int)$totalProducts; ?></div>
+                    </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-3">
-                    <div class="card stat-card h-100"><div class="card-body"><div class="stat-label">Doanh thu hom nay</div><div class="stat-value"><?php echo number_format((float)($todayRevenue['total'] ?? 0), 0, ',', '.'); ?> đ</div></div></div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Còn hàng</div>
+                        <div class="stat-value" id="statInStock"><?php echo (int)$inStock; ?></div>
+                    </div>
                 </div>
-                <div class="col-xl-4 col-md-6 mb-3">
-                    <div class="card stat-card h-100"><div class="card-body"><div class="stat-label">San pham dang ban</div><div class="stat-value"><?php echo number_format((int)($availableCount['c'] ?? 0)); ?></div></div></div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Hết hàng</div>
+                        <div class="stat-value" id="statOutOfStock"><?php echo (int)$outOfStock; ?></div>
+                    </div>
                 </div>
             </div>
 
-            <div class="row g-3">
-                <div class="col-xl-8">
-                    <div class="card dashboard-card mb-3">
-                        <div class="card-header dashboard-card-header d-flex justify-content-between align-items-center">
-                            <h6 class="dashboard-card-title">Danh muc san pham tai quay</h6>
-                            <input type="text" id="searchProduct" class="form-control form-control-sm" placeholder="Tim ten san pham..." style="max-width: 240px;">
-                        </div>
-                        <div class="card-body">
-                            <div class="product-grid" id="productGrid">
-                                <?php foreach ($products as $p): ?>
-                                    <?php
-                                        $barcode = 'GWV-' . (int)$p['item_id'];
-                                        $price = (float)($p['sale_price'] ?? 0);
-                                    ?>
-                                    <div class="product-card"
-                                        data-id="<?php echo (int)$p['item_id']; ?>"
-                                        data-name="<?php echo htmlspecialchars($p['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-price="<?php echo $price; ?>"
-                                        data-qty="<?php echo (int)$p['quantity']; ?>"
-                                        data-barcode="<?php echo $barcode; ?>">
-                                        <div class="product-title"><?php echo htmlspecialchars($p['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
-                                        <div class="product-meta">
-                                            <?php echo htmlspecialchars($p['category_name'] ?? 'Khong phan loai', ENT_QUOTES, 'UTF-8'); ?>
-                                            | Ton: <?php echo (int)$p['quantity']; ?>
-                                        </div>
-                                        <div class="barcode-wrap">
-                                            <svg id="bc-<?php echo (int)$p['item_id']; ?>"></svg>
-                                            <div class="small text-muted"><?php echo $barcode; ?></div>
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="button" class="btn btn-sm btn-primary flex-fill addToCartBtn">Them vao gio</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary printBarcodeBtn">In ma</button>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+            <div class="layout-grid">
+                <div class="card-box">
+                    <div class="card-head">
+                        <h6>Danh sách sản phẩm + mã vạch</h6>
+                        <div class="search-wrap">
+                            <i class="bi bi-search"></i>
+                            <input type="text" id="searchInput" placeholder="Tìm theo tên, danh mục, mã vạch...">
                         </div>
                     </div>
 
-                    <div class="card dashboard-card">
-                        <div class="card-header dashboard-card-header d-flex justify-content-between align-items-center">
-                            <h6 class="dashboard-card-title">Quet ma vach (camera)</h6>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="startScanBtn">Bat camera</button>
-                                <button type="button" class="btn btn-sm btn-outline-danger" id="stopScanBtn" disabled>Tat camera</button>
+                    <div class="products-grid" id="productsGrid">
+                        <?php foreach ($products as $p): ?>
+                            <?php
+                                $barcodeCode = 'GWV' . str_pad((string)((int)$p['item_id']), 6, '0', STR_PAD_LEFT);
+                                $qty = (int)($p['available_quantity'] ?? 0);
+                                $isOut = $qty <= 0 || ($p['status'] ?? '') === 'sold';
+                            ?>
+                            <div class="product-card"
+                                 data-id="<?php echo (int)$p['item_id']; ?>"
+                                 data-name="<?php echo htmlspecialchars($p['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                 data-cat="<?php echo htmlspecialchars($p['category_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                 data-barcode="<?php echo htmlspecialchars($barcodeCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                 id="product-<?php echo (int)$p['item_id']; ?>">
+                                <img class="product-img"
+                                     src="../<?php echo htmlspecialchars($p['img_url'], ENT_QUOTES, 'UTF-8'); ?>"
+                                     onerror="this.src='../uploads/donations/placeholder-default.svg'"
+                                     alt="<?php echo htmlspecialchars($p['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="product-body">
+                                    <div class="product-name"><?php echo htmlspecialchars($p['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <div class="product-cat"><?php echo htmlspecialchars($p['category_name'] ?? 'Không phân loại', ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <div class="product-price"><?php echo number_format((float)($p['sale_price'] ?? 0), 0, ',', '.'); ?>đ</div>
+                                    <span class="stock-badge <?php echo $isOut ? 'stock-out' : 'stock-ok'; ?>" data-stock-text="<?php echo (int)$p['item_id']; ?>">
+                                        <?php echo $isOut ? 'Hết hàng' : ('Tồn: ' . $qty); ?>
+                                    </span>
+
+                                    <div class="barcode-box">
+                                        <svg class="barcode-svg" id="barcode-<?php echo (int)$p['item_id']; ?>"></svg>
+                                        <div class="barcode-code"><?php echo htmlspecialchars($barcodeCode, ENT_QUOTES, 'UTF-8'); ?></div>
+                                    </div>
+
+                                    <div class="actions">
+                                        <button class="btn-smx" type="button" data-action="download" data-item-id="<?php echo (int)$p['item_id']; ?>">
+                                            <i class="bi bi-download me-1"></i>Tải PNG mã vạch
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="scanner-box mb-2">
-                                <div id="reader" style="width: 100%; min-height: 280px;"></div>
-                            </div>
-                            <div class="small text-muted">
-                                Ma vach Goodwill su dung dinh dang: <strong>GWV-{item_id}</strong>.
-                                Khi quet dung ma, san pham se tu dong them vao gio.
-                            </div>
-                            <div id="scanStatus" class="mt-2 small"></div>
-                        </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
 
-                <div class="col-xl-4">
-                    <div class="card dashboard-card mb-3">
-                        <div class="card-header dashboard-card-header">
-                            <h6 class="dashboard-card-title">Gio hang / Thanh toan</h6>
-                        </div>
-                        <div class="card-body">
-                            <form method="post" id="checkoutForm">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(generateCSRFToken(), ENT_QUOTES, 'UTF-8'); ?>">
-                                <input type="hidden" name="cart_json" id="cartJson" value="[]">
-
-                                <div class="mb-2">
-                                    <label class="form-label form-label-sm">Ten khach (tuy chon)</label>
-                                    <input type="text" name="customer_name" class="form-control form-control-sm" placeholder="Khach mua tai quay">
-                                </div>
-
-                                <div class="table-responsive mb-2">
-                                    <table class="table table-sm cart-table" id="cartTable">
-                                        <thead>
-                                            <tr>
-                                                <th>SP</th>
-                                                <th>SL</th>
-                                                <th>Gia</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr id="emptyCartRow"><td colspan="4" class="text-muted text-center">Chua co san pham</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="fw-semibold">Tam tinh:</span>
-                                    <span id="cartSubtotal">0 đ</span>
-                                </div>
-
-                                <div class="mb-2">
-                                    <label class="form-label form-label-sm d-block">Phuong thuc thanh toan</label>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="payCash" value="cash" checked>
-                                        <label class="form-check-label" for="payCash">Tien mat</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method" id="payBank" value="bank_transfer">
-                                        <label class="form-check-label" for="payBank">Chuyen khoan</label>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary w-100" id="checkoutBtn">
-                                    <i class="bi bi-receipt-cutoff me-1"></i>Thanh toan va xuat bill
-                                </button>
-                            </form>
-                        </div>
+                <div class="card-box">
+                    <div class="card-head">
+                        <h6>Quét mã để tìm sản phẩm</h6>
                     </div>
-
-                    <div class="card dashboard-card" id="receiptArea" <?php echo $receipt ? '' : 'style="display:none;"'; ?>>
-                        <div class="card-header dashboard-card-header d-flex justify-content-between align-items-center">
-                            <h6 class="dashboard-card-title">Bill vua tao</h6>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="printReceiptBtn">
-                                <i class="bi bi-printer"></i>
+                    <div class="scan-body">
+                        <div class="scan-actions">
+                            <button class="scan-btn primary" id="startScanBtn" type="button">
+                                <i class="bi bi-camera-video me-1"></i>Bật camera
+                            </button>
+                            <button class="scan-btn" id="stopScanBtn" type="button" disabled>
+                                <i class="bi bi-stop-circle me-1"></i>Dừng
                             </button>
                         </div>
-                        <div class="card-body receipt-print" id="receiptBody">
-                            <?php if ($receipt): ?>
-                                <div class="fw-bold">Goodwill Vietnam</div>
-                                <div class="small text-muted mb-2">Bill #<?php echo (int)$receipt['order_id']; ?> - <?php echo htmlspecialchars($receipt['created_at'], ENT_QUOTES, 'UTF-8'); ?></div>
-                                <div class="small mb-1">Khach: <?php echo htmlspecialchars($receipt['customer_name'], ENT_QUOTES, 'UTF-8'); ?></div>
-                                <div class="small mb-2">Thanh toan: <?php echo $receipt['payment_method'] === 'cash' ? 'Tien mat' : 'Chuyen khoan'; ?></div>
-                                <hr>
-                                <?php foreach ($receipt['items'] as $item): ?>
-                                    <div class="d-flex justify-content-between small">
-                                        <span><?php echo htmlspecialchars($item['item_name'], ENT_QUOTES, 'UTF-8'); ?> x<?php echo (int)$item['quantity']; ?></span>
-                                        <span><?php echo number_format((float)$item['subtotal'], 0, ',', '.'); ?> đ</span>
-                                    </div>
-                                <?php endforeach; ?>
-                                <hr>
-                                <div class="d-flex justify-content-between fw-bold">
-                                    <span>Tong cong</span>
-                                    <span><?php echo number_format((float)$receipt['total_amount'], 0, ',', '.'); ?> đ</span>
-                                </div>
-                            <?php endif; ?>
+
+                        <div class="scan-manual">
+                            <input type="text" id="manualBarcodeInput" placeholder="VD: GWV000123">
+                            <button type="button" id="manualFindBtn">Tìm</button>
                         </div>
+
+                        <div class="scan-reader-wrap" id="scanReaderWrap">
+                            <div id="scannerReader"></div>
+                            <div class="scan-overlay" id="scanOverlay">
+                                <div class="scan-corner tl"></div>
+                                <div class="scan-corner tr"></div>
+                                <div class="scan-corner bl"></div>
+                                <div class="scan-corner br"></div>
+                                <div class="scan-laser" id="scanLaser"></div>
+                                <div class="scan-success-flash" id="scanFlash"></div>
+                                <div class="scan-badge-pop" id="scanBadge">✓ Đã nhận diện</div>
+                            </div>
+                        </div>
+                        <div class="scan-status" id="scanStatus">Sẵn sàng quét mã.</div>
                     </div>
                 </div>
             </div>
-
-            <div class="modal fade" id="barcodeModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">In ma vach san pham</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body text-center">
-                            <div id="barcodeModalName" class="fw-semibold mb-2"></div>
-                            <svg id="barcodeModalSvg"></svg>
-                            <div id="barcodeModalText" class="small text-muted mt-2"></div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Dong</button>
-                            <button type="button" class="btn btn-primary" id="printBarcodeConfirmBtn">In ma</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </main>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="../assets/js/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
-(function () {
-    const currency = (v) => new Intl.NumberFormat('vi-VN').format(v || 0) + ' đ';
-    const cart = new Map();
+(() => {
+    'use strict';
 
-    const grid = document.getElementById('productGrid');
-    const cartTableBody = document.querySelector('#cartTable tbody');
-    const cartSubtotal = document.getElementById('cartSubtotal');
-    const cartJson = document.getElementById('cartJson');
-    const checkoutForm = document.getElementById('checkoutForm');
-    const searchInput = document.getElementById('searchProduct');
-
-    const barcodeModal = new bootstrap.Modal(document.getElementById('barcodeModal'));
-    const barcodeModalSvg = document.getElementById('barcodeModalSvg');
-    const barcodeModalName = document.getElementById('barcodeModalName');
-    const barcodeModalText = document.getElementById('barcodeModalText');
-    const printBarcodeConfirmBtn = document.getElementById('printBarcodeConfirmBtn');
-
-    let currentBarcodeText = '';
-
-    function renderCart() {
-        cartTableBody.innerHTML = '';
-
-        let subtotal = 0;
-        if (cart.size === 0) {
-            cartTableBody.innerHTML = '<tr id="emptyCartRow"><td colspan="4" class="text-muted text-center">Chua co san pham</td></tr>';
-        } else {
-            cart.forEach((item) => {
-                subtotal += item.price * item.quantity;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${item.name}</td>
-                    <td>
-                        <input type="number" min="1" max="${item.maxQty}" value="${item.quantity}" class="form-control form-control-sm qty-input" data-id="${item.id}">
-                    </td>
-                    <td>${currency(item.price * item.quantity)}</td>
-                    <td><button type="button" class="btn btn-sm btn-outline-danger remove-item" data-id="${item.id}"><i class="bi bi-x"></i></button></td>
-                `;
-                cartTableBody.appendChild(tr);
-            });
-        }
-
-        cartSubtotal.textContent = currency(subtotal);
-        cartJson.value = JSON.stringify(Array.from(cart.values()).map(i => ({ item_id: i.id, quantity: i.quantity })));
-    }
-
-    function addToCart(id, name, price, maxQty) {
-        if (!id || maxQty <= 0) return;
-        const existing = cart.get(id);
-        if (existing) {
-            existing.quantity = Math.min(existing.quantity + 1, existing.maxQty);
-            cart.set(id, existing);
-        } else {
-            cart.set(id, { id, name, price, quantity: 1, maxQty });
-        }
-        renderCart();
-    }
-
-    grid.querySelectorAll('.product-card').forEach((card) => {
-        const id = parseInt(card.dataset.id, 10);
-        const name = card.dataset.name;
-        const price = parseFloat(card.dataset.price || '0');
-        const maxQty = parseInt(card.dataset.qty || '0', 10);
-        const barcode = card.dataset.barcode;
-
-        const svg = card.querySelector('svg');
-        try {
-            JsBarcode(svg, barcode, { format: 'CODE128', width: 1.5, height: 35, displayValue: false, margin: 0 });
-        } catch (e) {}
-
-        card.querySelector('.addToCartBtn').addEventListener('click', () => addToCart(id, name, price, maxQty));
-
-        card.querySelector('.printBarcodeBtn').addEventListener('click', () => {
-            currentBarcodeText = barcode;
-            barcodeModalName.textContent = name;
-            barcodeModalText.textContent = barcode;
-            try {
-                JsBarcode(barcodeModalSvg, barcode, { format: 'CODE128', width: 2, height: 80, displayValue: true, margin: 10 });
-            } catch (e) {}
-            barcodeModal.show();
-        });
-    });
-
-    cartTableBody.addEventListener('input', (e) => {
-        if (!e.target.classList.contains('qty-input')) return;
-        const id = parseInt(e.target.dataset.id, 10);
-        const v = parseInt(e.target.value || '1', 10);
-        if (!cart.has(id)) return;
-        const row = cart.get(id);
-        row.quantity = Math.max(1, Math.min(v, row.maxQty));
-        cart.set(id, row);
-        renderCart();
-    });
-
-    cartTableBody.addEventListener('click', (e) => {
-        const btn = e.target.closest('.remove-item');
-        if (!btn) return;
-        const id = parseInt(btn.dataset.id, 10);
-        cart.delete(id);
-        renderCart();
-    });
-
-    searchInput.addEventListener('input', () => {
-        const keyword = searchInput.value.trim().toLowerCase();
-        grid.querySelectorAll('.product-card').forEach((card) => {
-            const name = (card.dataset.name || '').toLowerCase();
-            const code = (card.dataset.barcode || '').toLowerCase();
-            const show = keyword === '' || name.includes(keyword) || code.includes(keyword);
-            card.style.display = show ? '' : 'none';
-        });
-    });
-
-    checkoutForm.addEventListener('submit', (e) => {
-        if (cart.size === 0) {
-            e.preventDefault();
-            alert('Gio hang dang rong.');
-        }
-    });
-
-    printBarcodeConfirmBtn.addEventListener('click', () => {
-        if (!currentBarcodeText) return;
-        const w = window.open('', '_blank', 'width=420,height=320');
-        if (!w) return;
-        const svgHtml = barcodeModalSvg.outerHTML;
-        w.document.write(`
-            <html><head><title>In ma vach</title></head>
-            <body style="font-family:Arial,sans-serif;text-align:center;padding:24px;">
-                ${svgHtml}
-                <div style="margin-top:8px;">${currentBarcodeText}</div>
-                <script>window.print();<\/script>
-            </body></html>
-        `);
-        w.document.close();
-    });
-
-    const printBtn = document.getElementById('printReceiptBtn');
-    const printBtnTop = document.getElementById('printReceiptBtnTop');
-    const receiptArea = document.getElementById('receiptArea');
-    if (receiptArea && receiptArea.style.display !== 'none') {
-        if (printBtnTop) printBtnTop.style.display = '';
-    }
-
-    [printBtn, printBtnTop].forEach((btn) => {
-        if (!btn) return;
-        btn.addEventListener('click', () => window.print());
-    });
-
-    // Barcode scanner with camera
-    const startBtn = document.getElementById('startScanBtn');
-    const stopBtn = document.getElementById('stopScanBtn');
+    const searchInput = document.getElementById('searchInput');
+    const productsGrid = document.getElementById('productsGrid');
+    const startScanBtn = document.getElementById('startScanBtn');
+    const stopScanBtn = document.getElementById('stopScanBtn');
+    const manualBarcodeInput = document.getElementById('manualBarcodeInput');
+    const manualFindBtn = document.getElementById('manualFindBtn');
     const scanStatus = document.getElementById('scanStatus');
-    let scanner = null;
+    const scannerReader = document.getElementById('scannerReader');
+    const scanReaderWrap  = document.getElementById('scanReaderWrap');
+    const scanFlash       = document.getElementById('scanFlash');
+    const scanBadge       = document.getElementById('scanBadge');
+    const statTotalProducts = document.getElementById('statTotalProducts');
+    const statInStock = document.getElementById('statInStock');
+    const statOutOfStock = document.getElementById('statOutOfStock');
 
-    function updateScanStatus(text, cls) {
-        scanStatus.className = 'mt-2 small ' + (cls || 'text-muted');
+    const barcodeToCard = new Map();
+    const stockById = new Map();
+    let html5QrCode = null;
+    let scanning = false;
+    let lastCode = '';
+    let lastAt = 0;
+
+    const normalize = (v) => String(v || '').trim().toUpperCase();
+
+    function setStatus(text, error = false) {
         scanStatus.textContent = text;
+        scanStatus.style.background = error ? '#fef2f2' : '#eef8fc';
+        scanStatus.style.color = error ? '#b91c1c' : '#0b728c';
+    }
+
+    function applySnapshot(snapshot = {}) {
+        let inStock = 0;
+        let outStock = 0;
+
+        Object.entries(snapshot).forEach(([idStr, row]) => {
+            const id = parseInt(idStr, 10);
+            const card = document.querySelector(`.product-card[data-id="${id}"]`);
+            if (!card) return;
+
+            const qty = Math.max(0, parseInt(row.available_quantity || 0, 10));
+            stockById.set(id, qty);
+
+            const stockEl = card.querySelector(`[data-stock-text="${id}"]`);
+            if (stockEl) {
+                if (qty > 0) {
+                    stockEl.textContent = 'Tồn: ' + qty;
+                    stockEl.classList.remove('stock-out');
+                    stockEl.classList.add('stock-ok');
+                } else {
+                    stockEl.textContent = 'Hết hàng';
+                    stockEl.classList.remove('stock-ok');
+                    stockEl.classList.add('stock-out');
+                }
+            }
+
+            if (qty > 0) {
+                inStock++;
+                card.style.opacity = '1';
+            } else {
+                outStock++;
+                card.style.opacity = '.68';
+            }
+        });
+
+        if (statTotalProducts) statTotalProducts.textContent = String(Object.keys(snapshot).length || document.querySelectorAll('.product-card').length);
+        if (statInStock) statInStock.textContent = String(inStock);
+        if (statOutOfStock) statOutOfStock.textContent = String(outStock);
+    }
+
+    async function refreshStockSnapshot(showError = false) {
+        try {
+            const res = await fetch('cashier-panel.php?stock_snapshot=1', {
+                cache: 'no-store',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            if (!json || json.success !== true || typeof json.data !== 'object') throw new Error('Invalid response');
+            applySnapshot(json.data);
+        } catch (e) {
+            if (showError) setStatus('Không thể đồng bộ tồn kho thời gian thực.', true);
+        }
+    }
+
+    function renderBarcodes() {
+        if (typeof JsBarcode !== 'function') return;
+        document.querySelectorAll('.product-card').forEach((card) => {
+            const code = normalize(card.dataset.barcode);
+            const svg = card.querySelector('.barcode-svg');
+            if (!code || !svg) return;
+            try {
+                JsBarcode(svg, code, {
+                    format: 'CODE128',
+                    lineColor: '#0f172a',
+                    width: 1.45,
+                    height: 40,
+                    displayValue: false,
+                    margin: 0
+                });
+                barcodeToCard.set(code, card);
+            } catch (e) {
+                console.warn('Cannot render barcode', code, e);
+            }
+        });
+    }
+
+    function downloadBarcodePng(card) {
+        const svg = card.querySelector('.barcode-svg');
+        const code = normalize(card.dataset.barcode);
+        const productName = String(card.dataset.name || 'San pham').trim();
+        if (!svg || !code) return;
+
+        const serializer = new XMLSerializer();
+        const svgData = serializer.serializeToString(svg);
+        const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+
+        img.onload = function () {
+            const canvas = document.createElement('canvas');
+            const labelWidth = 720;
+            const labelHeight = 330;
+            canvas.width = labelWidth;
+            canvas.height = labelHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Header
+            ctx.fillStyle = '#0f172a';
+            ctx.font = '700 30px Arial';
+            ctx.textAlign = 'center';
+            const nameText = productName.length > 44 ? (productName.slice(0, 41) + '...') : productName;
+            ctx.fillText(nameText, labelWidth / 2, 52);
+
+            // Barcode
+            const barcodeW = Math.min(620, labelWidth - 60);
+            const barcodeH = 150;
+            const x = Math.round((labelWidth - barcodeW) / 2);
+            const y = 78;
+            ctx.drawImage(img, x, y, barcodeW, barcodeH);
+
+            // Code text
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '700 28px Arial';
+            ctx.fillText(code, labelWidth / 2, 265);
+
+            // Footer
+            ctx.fillStyle = '#64748b';
+            ctx.font = '500 20px Arial';
+            ctx.fillText('Goodwill Vietnam', labelWidth / 2, 299);
+            URL.revokeObjectURL(url);
+
+            const a = document.createElement('a');
+            a.href = canvas.toDataURL('image/png');
+            a.download = code + '.png';
+            a.click();
+        };
+        img.src = url;
+    }
+
+    function highlightCard(card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.boxShadow = '0 0 0 3px rgba(11,114,140,.36), 0 10px 22px rgba(8,74,92,.18)';
+        setTimeout(() => { card.style.boxShadow = ''; }, 1000);
+    }
+
+    let _scanFoundTimer = null;
+    function _triggerScanFound(code) {
+        scanReaderWrap.classList.add('barcode-found');
+        scannerReader.classList.add('barcode-found');
+
+        if (scanFlash) {
+            scanFlash.classList.remove('active');
+            void scanFlash.offsetWidth;
+            scanFlash.classList.add('active');
+        }
+
+        if (scanBadge) {
+            const found = barcodeToCard.get(code);
+            scanBadge.textContent = '✓ ' + (found ? found.dataset.name : code);
+            scanBadge.classList.remove('active');
+            void scanBadge.offsetWidth;
+            scanBadge.classList.add('active');
+        }
+
+        clearTimeout(_scanFoundTimer);
+        _scanFoundTimer = setTimeout(() => {
+            scanReaderWrap.classList.remove('barcode-found');
+            scannerReader.classList.remove('barcode-found');
+            if (scanFlash)  scanFlash.classList.remove('active');
+            if (scanBadge)  scanBadge.classList.remove('active');
+        }, 600);
+    }
+
+    function findByCode(rawCode) {
+        const code = normalize(rawCode);
+        const card = barcodeToCard.get(code);
+        if (!card) {
+            setStatus('Không tìm thấy mã: ' + code, true);
+            return;
+        }
+        const id = parseInt(card.dataset.id || '0', 10);
+        if (stockById.has(id) && stockById.get(id) <= 0) {
+            setStatus('Mã ' + code + ' hiện đã hết hàng.', true);
+        } else {
+            setStatus('Đã định vị sản phẩm: ' + code);
+        }
+        highlightCard(card);
     }
 
     async function startScanner() {
-        if (scanner) return;
-        scanner = new Html5Qrcode('reader');
+        if (scanning) return;
+        if (typeof Html5Qrcode === 'undefined') {
+            setStatus('Không tải được thư viện quét camera.', true);
+            return;
+        }
+
+        scanReaderWrap.classList.add('scanning');
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode('scannerReader');
+        }
 
         try {
-            await scanner.start(
-                { facingMode: 'environment' },
-                { fps: 10, qrbox: { width: 250, height: 120 } },
+            await html5QrCode.start(
+                { facingMode: { exact: 'environment' } },
+                {
+                    fps: 10,
+                    qrbox: { width: 280, height: 130 },
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.CODE_128,
+                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.CODE_93,
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.ITF,
+                        Html5QrcodeSupportedFormats.QR_CODE
+                    ]
+                },
                 (decodedText) => {
-                    const m = String(decodedText || '').trim().match(/^GWV-(\d+)$/i);
-                    if (!m) {
-                        updateScanStatus('Ma vua quet khong dung dinh dang Goodwill (GWV-id).', 'text-danger');
-                        return;
-                    }
-
-                    const id = parseInt(m[1], 10);
-                    const card = grid.querySelector(`.product-card[data-id="${id}"]`);
-                    if (!card) {
-                        updateScanStatus('Khong tim thay san pham tu ma vach: ' + decodedText, 'text-danger');
-                        return;
-                    }
-
-                    addToCart(
-                        parseInt(card.dataset.id, 10),
-                        card.dataset.name,
-                        parseFloat(card.dataset.price || '0'),
-                        parseInt(card.dataset.qty || '0', 10)
-                    );
-
-                    updateScanStatus('Da them san pham vao gio: ' + (card.dataset.name || ''), 'text-success');
+                    const code = normalize(decodedText);
+                    const now = Date.now();
+                    if (code === lastCode && (now - lastAt) < 1200) return;
+                    lastCode = code;
+                    lastAt = now;
+                    findByCode(code);
+                    _triggerScanFound(code);
                 },
                 () => {}
             );
-
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            updateScanStatus('Camera dang hoat dong. Dua ma vach vao khung quet...', 'text-primary');
         } catch (err) {
-            scanner = null;
-            updateScanStatus('Khong the mo camera. Vui long cap quyen camera cho trang web.', 'text-danger');
+            try {
+                await html5QrCode.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 280, height: 130 } },
+                    (decodedText) => findByCode(decodedText),
+                    () => {}
+                );
+            } catch (err2) {
+                scanReaderWrap.classList.remove('scanning');
+                setStatus('Không bật được camera. Kiểm tra quyền camera.', true);
+                return;
+            }
         }
+
+        scanning = true;
+        startScanBtn.disabled = true;
+        stopScanBtn.disabled = false;
+        setStatus('Đang quét mã vạch...');
     }
 
     async function stopScanner() {
-        if (!scanner) return;
+        if (!scanning || !html5QrCode) return;
         try {
-            await scanner.stop();
-            await scanner.clear();
+            await html5QrCode.stop();
+            await html5QrCode.clear();
         } catch (e) {}
-        scanner = null;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        updateScanStatus('Da tat camera.', 'text-muted');
+
+        scanning = false;
+        startScanBtn.disabled = false;
+        stopScanBtn.disabled = true;
+        scanReaderWrap.classList.remove('scanning', 'barcode-found');
+        setStatus('Đã dừng camera.');
     }
 
-    startBtn.addEventListener('click', startScanner);
-    stopBtn.addEventListener('click', stopScanner);
+    productsGrid.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="download"]');
+        if (!btn) return;
+        const card = btn.closest('.product-card');
+        if (!card) return;
+        downloadBarcodePng(card);
+    });
 
-    renderCart();
+    searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        document.querySelectorAll('.product-card').forEach((card) => {
+            const hit = !q
+                || card.dataset.name.toLowerCase().includes(q)
+                || (card.dataset.cat || '').toLowerCase().includes(q)
+                || (card.dataset.barcode || '').toLowerCase().includes(q);
+            card.style.display = hit ? '' : 'none';
+        });
+    });
+
+    startScanBtn.addEventListener('click', startScanner);
+    stopScanBtn.addEventListener('click', stopScanner);
+
+    manualFindBtn.addEventListener('click', () => {
+        findByCode(manualBarcodeInput.value);
+    });
+    manualBarcodeInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            manualFindBtn.click();
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (scanning) stopScanner();
+    });
+
+    renderBarcodes();
+    refreshStockSnapshot(false);
+    setInterval(() => { refreshStockSnapshot(false); }, 7000);
 })();
 </script>
 </body>

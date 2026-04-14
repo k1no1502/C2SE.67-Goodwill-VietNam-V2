@@ -245,26 +245,53 @@ $trackingMap = getDonationTrackingMap($donationIds);
         }
 
         .donations-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 1rem 1.1rem;
-            margin-top: 0.35rem;
+            padding: 0.15rem 0 0.25rem;
+            margin-top: 0.2rem;
             margin-bottom: 1rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            box-shadow: none;
         }
 
-        .donations-topbar .h2 {
+        .donations-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .donations-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .donations-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .donations-head-title {
             margin: 0;
             color: #0f172a;
-            font-weight: 800;
-            letter-spacing: 0.2px;
+            font-weight: 900;
+            letter-spacing: 0.1px;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            line-height: 1.08;
         }
 
         .donations-topbar-subtitle {
-            color: #64748b;
-            font-size: 0.92rem;
-            margin-top: 0.2rem;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin-top: 0.32rem;
+            line-height: 1.25;
         }
 
         .donations-tabs-wrap {
@@ -554,6 +581,25 @@ $trackingMap = getDonationTrackingMap($donationIds);
         }
 
         @media (max-width: 768px) {
+            .donations-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+
+            .donations-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+
+            .donations-head-icon i {
+                font-size: 1.45rem;
+            }
+
+            .donations-topbar-subtitle {
+                font-size: 1rem;
+            }
+
             .donation-actions {
                 gap: 6px;
             }
@@ -578,6 +624,101 @@ $trackingMap = getDonationTrackingMap($donationIds);
                 width: 100%;
             }
         }
+
+        /* Reject Modal Redesign */
+        .reject-modal .modal-content {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(220, 53, 69, 0.15);
+            overflow: hidden;
+        }
+
+        .reject-modal .modal-header {
+            background: linear-gradient(135deg, #fffafa 0%, #fff0f0 100%);
+            border-bottom: 1px solid #ffe6e6;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .reject-modal .modal-title {
+            color: #c92a2a;
+            font-weight: 800;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+        }
+
+        .reject-modal .modal-body {
+            padding: 1.8rem 1.5rem;
+            background: #fff;
+        }
+
+        .reject-modal .form-label {
+            font-weight: 700;
+            color: #495057;
+            margin-bottom: 0.6rem;
+            font-size: 0.95rem;
+        }
+
+        .reject-modal .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
+            transition: all 0.2s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            font-size: 0.95rem;
+            resize: none;
+        }
+
+        .reject-modal .form-control:focus {
+            border-color: #ffc1c7;
+            box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.1);
+        }
+
+        .reject-modal .modal-footer {
+            background: #fafafa;
+            border-top: 1px solid #f1f3f5;
+            padding: 1.2rem 1.5rem;
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-modern-cancel {
+            background: #fff;
+            border: 1px solid #d1d5db;
+            color: #4b5563;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 0.6rem 1.2rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-modern-cancel:hover {
+            background: #f3f4f6;
+            color: #111827;
+            transform: translateY(-1px);
+        }
+
+        .btn-modern-reject {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            color: #fff;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 0.6rem 1.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 16px rgba(220, 38, 38, 0.25);
+            transition: all 0.2s ease;
+        }
+
+        .btn-modern-reject:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(220, 38, 38, 0.35);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -593,9 +734,19 @@ $trackingMap = getDonationTrackingMap($donationIds);
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content admin-donations">
                 <div class="donations-topbar d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center gap-2">
+                    <div class="donations-head">
+                        <div class="donations-head-icon">
+                            <i class="bi bi-heart-fill"></i>
+                        </div>
+                        <div>
+                            <h1 class="donations-head-title">Quản lý quyên góp</h1>
+                            <div class="donations-topbar-subtitle">Theo dõi, duyệt và cập nhật hành trình xử lý quyên góp</div>
+                        </div>
+                    </div>
                     <div>
-                        <h1 class="h2"><i class="bi bi-heart-fill me-2"></i>Quản lý quyên góp</h1>
-                        <div class="donations-topbar-subtitle">Theo dõi, duyệt và cập nhật hành trình xử lý quyên góp</div>
+                        <a href="money-donations.php" class="btn btn-success">
+                            <i class="bi bi-cash-coin me-1"></i>Xem lịch sử quyên góp tiền
+                        </a>
                     </div>
                 </div>
 
@@ -852,28 +1003,38 @@ $trackingMap = getDonationTrackingMap($donationIds);
                                             </div>
 
                                             <!-- Reject Modal -->
-                                            <div class="modal" id="rejectModal<?php echo $donation['donation_id']; ?>" tabindex="-1">
-                                                <div class="modal-dialog">
+                                            <div class="modal fade reject-modal" id="rejectModal<?php echo $donation['donation_id']; ?>" tabindex="-1">
+                                                <div class="modal-dialog modal-dialog-centered">
                                                     <div class="modal-content">
                                                         <form method="POST">
                                                             <div class="modal-header">
-                                                                <h5 class="modal-title">Từ chối quyên góp</h5>
+                                                                <div class="modal-title">
+                                                                    <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                                                                        <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.1rem;"></i>
+                                                                    </div>
+                                                                    Từ chối quyên góp
+                                                                </div>
                                                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                             </div>
                                                             <div class="modal-body">
                                                                 <input type="hidden" name="donation_id" value="<?php echo $donation['donation_id']; ?>">
                                                                 <input type="hidden" name="action" value="reject">
-                                                                <div class="mb-3">
-                                                                    <label class="form-label">Lý do từ chối:</label>
-                                                                    <textarea class="form-control" name="reject_reason" rows="3" required></textarea>
+                                                                
+                                                                <p class="text-muted mb-4" style="font-size: 0.95rem; line-height: 1.5;">
+                                                                    Bạn đang thao tác từ chối quyên góp bảo vật <strong>#<?php echo $donation['donation_id']; ?></strong>. Vui lòng cung cấp lý do cụ thể để người dùng có thể xem lại thông tin.
+                                                                </p>
+
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">Lý do từ chối <span class="text-danger">*</span></label>
+                                                                    <textarea class="form-control" name="reject_reason" rows="4" placeholder="Nhập lý do chi tiết..." required></textarea>
                                                                 </div>
                                                             </div>
-                                                            <div class="modal-footer gap-2">
-                                                                <button type="button" class="modal-action-btn cancel" data-bs-dismiss="modal">
-                                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                            <div class="modal-footer justify-content-end">
+                                                                <button type="button" class="btn btn-modern-cancel" data-bs-dismiss="modal">
+                                                                    Huỷ bỏ
                                                                 </button>
-                                                                <button type="submit" class="modal-action-btn confirm-reject">
-                                                                    <i class="bi bi-x-lg"></i>
+                                                                <button type="submit" class="btn btn-modern-reject">
+                                                                    <i class="bi bi-x-circle-fill"></i> Xác nhận từ chối
                                                                 </button>
                                                             </div>
                                                         </form>

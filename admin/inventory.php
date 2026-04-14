@@ -182,46 +182,67 @@ $inventoryStats = [
 
         /* ── Topbar ── */
         .inventory-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 1rem 1.1rem;
+            padding: 0.15rem 0 0.3rem;
             color: #0f172a;
-            margin-top: 0.35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            margin-top: 0.2rem;
+            margin-bottom: 1.05rem;
+            box-shadow: none;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
             gap: 12px;
         }
-        .inventory-topbar-title {
-            font-size: clamp(2rem, 3vw, 3.4rem);
-            font-weight: 800;
-            line-height: 1.05;
-            letter-spacing: 0.2px;
-            margin: 0;
+        .inventory-head {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
+            gap: 0.9rem;
+        }
+        .inventory-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+        .inventory-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .inventory-topbar-title {
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: 0.1px;
+            margin: 0;
             color: #0f172a;
         }
-        .inventory-topbar-title i {
-            font-size: 0.9em;
-        }
         .inventory-topbar-sub  {
-            color: #64748b;
-            font-size: clamp(0.95rem, 1.2vw, 1.08rem);
-            margin: 0.45rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin: 0.35rem 0 0;
+            line-height: 1.25;
+            font-weight: 700;
         }
         @media (max-width: 767.98px) {
-            .inventory-topbar {
-                padding: 1rem;
+            .inventory-topbar { padding: 0.05rem 0 0.25rem; }
+            .inventory-head {
+                gap: 0.72rem;
+                align-items: flex-start;
             }
-            .inventory-topbar-title {
-                font-size: 2rem;
+            .inventory-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
             }
+            .inventory-head-icon i { font-size: 1.45rem; }
+            .inventory-topbar-sub { font-size: 1rem; }
         }
 
         /* ── Stat cards ── */
@@ -346,18 +367,50 @@ $inventoryStats = [
         .inventory-edit-modal .modal-dialog {
             max-width: min(760px, calc(100vw - 1.5rem));
             margin: 0.75rem auto;
+            height: calc(100vh - 1.5rem);
         }
         .inventory-edit-modal .modal-content {
             border: 1px solid #d6eaf1;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 20px 44px rgba(5, 73, 92, 0.22);
-            max-height: calc(100vh - 1.5rem);
+            max-height: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
         .inventory-edit-modal .modal-header {
             background: linear-gradient(140deg, #f2fbfe 0%, #e8f4fb 100%);
             border-bottom: 1px solid #d6eaf1;
             padding: 0.95rem 1.25rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.9rem;
+        }
+        .inventory-edit-modal .modal-header-main {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            min-width: 0;
+        }
+        .inventory-edit-modal .modal-header-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 18px rgba(8, 74, 92, 0.24);
+            flex-shrink: 0;
+        }
+        .inventory-edit-modal .modal-header-icon i {
+            font-size: 1.45rem;
+            line-height: 1;
+        }
+        .inventory-edit-modal .modal-heading-text {
+            min-width: 0;
         }
         .inventory-edit-modal .modal-title {
             font-weight: 800;
@@ -375,7 +428,8 @@ $inventoryStats = [
             padding: 1.15rem 1.25rem;
             overflow-y: auto;
             overflow-x: hidden;
-            max-height: calc(100vh - 220px);
+            max-height: none;
+            flex: 1 1 auto;
         }
         .inventory-edit-modal .edit-form-grid {
             display: grid;
@@ -429,6 +483,9 @@ $inventoryStats = [
             background: #eff8fc;
             padding: 0.85rem 1.25rem 1rem;
             gap: 0.6rem;
+            position: sticky;
+            bottom: 0;
+            z-index: 3;
         }
         .inventory-edit-modal .btn-modal-cancel,
         .inventory-edit-modal .btn-modal-submit {
@@ -481,12 +538,13 @@ $inventoryStats = [
 
             .inventory-edit-modal .modal-dialog {
                 margin: 0.7rem;
+                height: calc(100vh - 1.4rem);
             }
             .inventory-edit-modal .modal-content {
-                max-height: calc(100vh - 1.4rem);
+                max-height: 100%;
             }
             .inventory-edit-modal .modal-body {
-                max-height: calc(100vh - 190px);
+                max-height: none;
             }
             .inventory-edit-modal .image-editor-actions {
                 grid-template-columns: 1fr;
@@ -513,9 +571,14 @@ $inventoryStats = [
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="inventory-topbar">
-                    <div>
-                        <h1 class="inventory-topbar-title"><i class="bi bi-box-seam me-2"></i>Quản lý kho hàng</h1>
-                        <p class="inventory-topbar-sub">Theo dõi và cập nhật toàn bộ vật phẩm trong kho</p>
+                    <div class="inventory-head">
+                        <div class="inventory-head-icon">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div>
+                            <h1 class="inventory-topbar-title">Quản lý kho hàng</h1>
+                            <p class="inventory-topbar-sub">Theo dõi và cập nhật toàn bộ vật phẩm trong kho</p>
+                        </div>
                     </div>
                 </div>
 
@@ -713,13 +776,16 @@ $inventoryStats = [
                     <?php if (!empty($items)): ?>
                             <?php foreach ($items as $item): ?>
                                 <div class="modal fade inventory-edit-modal" id="editModal<?php echo $item['item_id']; ?>" tabindex="-1">
-                                    <div class="modal-dialog">
+                                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
                                         <div class="modal-content">
                                             <form method="POST" enctype="multipart/form-data">
                                                 <div class="modal-header">
-                                                    <div>
-                                                        <h5 class="modal-title">Cập nhật giá bán</h5>
-                                                        <div class="modal-subtitle">Vật phẩm #<?php echo $item['item_id']; ?> • Tùy chỉnh thông tin hiển thị trong kho</div>
+                                                    <div class="modal-header-main">
+                                                        <span class="modal-header-icon"><i class="bi bi-box-seam"></i></span>
+                                                        <div class="modal-heading-text">
+                                                            <h5 class="modal-title">Cập nhật giá bán</h5>
+                                                            <div class="modal-subtitle">Vật phẩm #<?php echo $item['item_id']; ?> • Tùy chỉnh thông tin hiển thị trong kho</div>
+                                                        </div>
                                                     </div>
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                 </div>

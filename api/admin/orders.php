@@ -164,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $statusToApply = $shippingStatusKey;
                 } elseif (in_array($last_mile_status, ['out_for_delivery', 'in_transit', 'picked_up', 'failed_delivery', 'returning', 'returned'], true)) {
                     $statusToApply = $shippingStatusKey;
-                } elseif (in_array($last_mile_status, ['waiting_pickup', 'created'], true)) {
+                } elseif (in_array($last_mile_status, ['payment_completed', 'waiting_pickup', 'created'], true)) {
                     $statusToApply = $confirmedStatusKey;
                 }
             }

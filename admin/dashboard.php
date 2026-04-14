@@ -59,35 +59,53 @@ $recentDonations = Database::fetchAll("
         }
 
         .dashboard-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
-            border-radius: 22px;
-            padding: 1rem 1.45rem;
-            margin-top: 0.35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            background: transparent;
+            border: 0;
+            border-radius: 16px;
+            padding: 0.15rem 0 0.3rem;
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
+            box-shadow: none;
         }
 
-        .dashboard-topbar .h2 {
-            margin: 0;
-            color: #0f172a;
-            font-weight: 800;
-            letter-spacing: 0.2px;
+        .dashboard-head {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
-            font-size: clamp(2rem, 3vw, 3.4rem);
-            line-height: 1.05;
+            gap: 0.9rem;
         }
 
-        .dashboard-topbar .h2 i {
-            font-size: 0.9em;
+        .dashboard-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .dashboard-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .dashboard-head-title {
+            margin: 0;
+            color: #0f172a;
+            font-weight: 900;
+            letter-spacing: 0.1px;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            line-height: 1.08;
         }
 
         .dashboard-note {
-            color: #64748b;
-            font-size: clamp(0.95rem, 1.2vw, 1.08rem);
-            margin-top: 0.45rem;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.18rem);
+            margin-top: 0.35rem;
+            line-height: 1.25;
         }
 
         .btn-dashboard-outline {
@@ -124,10 +142,22 @@ $recentDonations = Database::fetchAll("
         }
         @media (max-width: 767.98px) {
             .dashboard-topbar {
-                padding: 1rem;
+                padding: 0.05rem 0 0.25rem;
             }
-            .dashboard-topbar .h2 {
-                font-size: 2rem;
+            .dashboard-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+            .dashboard-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .dashboard-head-icon i {
+                font-size: 1.45rem;
+            }
+            .dashboard-note {
+                font-size: 1rem;
             }
             .btn-dashboard-outline,
             .btn-dashboard-primary {
@@ -223,9 +253,14 @@ $recentDonations = Database::fetchAll("
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="dashboard-topbar d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center gap-3">
-                    <div>
-                        <h1 class="h2"><i class="bi bi-heart-fill"></i>Dashboard</h1>
-                        <div class="dashboard-note">Tổng quan nhanh về hoạt động hệ thống Goodwill Vietnam</div>
+                    <div class="dashboard-head">
+                        <div class="dashboard-head-icon">
+                            <i class="bi bi-heart-fill"></i>
+                        </div>
+                        <div>
+                            <h1 class="dashboard-head-title">Dashboard</h1>
+                            <div class="dashboard-note">Tổng quan nhanh về hoạt động hệ thống Goodwill Vietnam</div>
+                        </div>
                     </div>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <div class="btn-group me-2">

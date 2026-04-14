@@ -124,17 +124,52 @@ $stats = [
 
         /* ── Topbar ── */
         .users-topbar {
-            background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 22px 28px;
-            color: #fff;
-            margin-bottom: 1.5rem;
+            padding: 0.15rem 0 0.25rem;
+            color: #0f172a;
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
             display: flex;
             align-items: center;
             gap: 12px;
         }
-        .users-topbar-title { font-size: 1.45rem; font-weight: 700; margin: 0; }
-        .users-topbar-sub  { font-size: .85rem; opacity: .82; margin: 2px 0 0; }
+        .users-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+        .users-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+        .users-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .users-topbar-title {
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: 0.1px;
+            margin: 0;
+            color: #0f172a;
+        }
+        .users-topbar-sub  {
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin: 0.35rem 0 0;
+            line-height: 1.25;
+        }
 
         /* ── Stat cards ── */
         .stat-card {
@@ -285,6 +320,18 @@ $stats = [
         .users-pagination .page-item.disabled .page-link { color: #adb5bd; }
 
         @media (max-width: 767.98px) {
+            .users-topbar { padding: 0.05rem 0 0.25rem; }
+            .users-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+            .users-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .users-head-icon i { font-size: 1.45rem; }
+            .users-topbar-sub { font-size: 1rem; }
             .stat-value { font-size: 1.5rem; }
             .users-table-card { border-radius: 12px; }
         }
@@ -297,9 +344,14 @@ $stats = [
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="users-topbar">
-                    <div>
-                        <h1 class="users-topbar-title"><i class="bi bi-people me-2"></i>Quản lý người dùng</h1>
-                        <p class="users-topbar-sub">Quản lý tài khoản, vai trò và trạng thái người dùng</p>
+                    <div class="users-head">
+                        <div class="users-head-icon">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <div>
+                            <h1 class="users-topbar-title">Quản lý người dùng</h1>
+                            <p class="users-topbar-sub">Quản lý tài khoản, vai trò và trạng thái người dùng</p>
+                        </div>
                     </div>
                 </div>
 

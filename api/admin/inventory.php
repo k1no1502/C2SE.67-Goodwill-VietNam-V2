@@ -16,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sale_price = (float)($payload['sale_price'] ?? 0);
             $new_name = trim((string)($payload['name'] ?? ''));
             $new_desc = trim((string)($payload['description'] ?? ''));
+            $new_image = trim((string)($payload['image_path'] ?? ''));
+            $remove_image = (int)($payload['remove_image'] ?? 0) === 1;
 
             $columns = ['price_type = ?', 'sale_price = ?'];
             $values = [$price_type, $sale_price];
@@ -28,11 +30,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $columns[] = 'description = ?';
                 $values[] = $new_desc;
             }
+            $finalImage = null;
+            if ($remove_image) {
+                $finalImage = 'placeholder-default.svg';
+            } elseif ($new_image !== '') {
+                $finalImage = ltrim($new_image, '/');
+            }
+
+            if ($finalImage !== null) {
+                $columns[] = 'images = ?';
+                $values[] = json_encode([$finalImage], JSON_UNESCAPED_UNICODE);
+            }
 
             Database::execute(
                 "UPDATE inventory SET " . implode(', ', $columns) . ", updated_at = NOW() WHERE item_id = ?",
                 array_merge($values, [$item_id])
             );
+
+            if ($finalImage !== null) {
+                $donationId = (int)(Database::fetch(
+                    "SELECT donation_id FROM inventory WHERE item_id = ?",
+                    [$item_id]
+                )['donation_id'] ?? 0);
+                if ($donationId > 0) {
+                    Database::execute(
+                        "UPDATE donations SET images = ?, updated_at = NOW() WHERE donation_id = ?",
+                        [json_encode([$finalImage], JSON_UNESCAPED_UNICODE), $donationId]
+                    );
+                }
+            }
             logActivity($currentUserId, 'update_inventory', "Updated inventory item #$item_id");
             api_json(true, ['message' => 'Updated']);
         }

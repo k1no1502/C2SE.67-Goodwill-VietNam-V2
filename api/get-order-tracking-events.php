@@ -255,6 +255,149 @@ function resolveTrackingStatus(array $order): string
     };
 }
 
+function inferTrackingStatusFromVietnameseText(string $text): ?string
+{
+    // Lightweight Vietnamese NLP rules for carrier notes/titles.
+    $normalized = normalizeVietnameseText($text);
+    if ($normalized === '') {
+        return null;
+    }
+
+    $containsAny = static function (string $haystack, array $needles): bool {
+        foreach ($needles as $needle) {
+            if ($needle !== '' && str_contains($haystack, $needle)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if ($containsAny($normalized, ['giao thanh cong', 'da giao', 'phat thanh cong', 'hoan tat giao'])) {
+        return 'delivered';
+    }
+    if ($containsAny($normalized, ['dang giao', 'dang phat', 'out for delivery', 'shipper dang giao'])) {
+        return 'out_for_delivery';
+    }
+    if ($containsAny($normalized, ['trung chuyen', 'dang van chuyen', 'dang luan chuyen', 'transit', 'kho trung chuyen'])) {
+        return 'in_transit';
+    }
+    if ($containsAny($normalized, ['da lay hang', 'da nhan hang tu shop', 'picked up'])) {
+        return 'picked_up';
+    }
+    if ($containsAny($normalized, ['cho lay hang', 'cho nhan hang', 'ready to pick'])) {
+        return 'waiting_pickup';
+    }
+    if ($containsAny($normalized, ['tao van don', 'da tao van don', 'created'])) {
+        return 'created';
+    }
+    if ($containsAny($normalized, ['giao that bai', 'khong giao duoc', 'phat that bai'])) {
+        return 'failed_delivery';
+    }
+    if ($containsAny($normalized, ['dang hoan', 'chuyen hoan', 'returning'])) {
+        return 'returning';
+    }
+    if ($containsAny($normalized, ['da hoan', 'hoan thanh cong', 'returned'])) {
+        return 'returned';
+    }
+
+    return null;
+}
+
+function normalizeStatusCodeFromEvent(array $event): string
+{
+    $rawCode = strtolower(trim((string)($event['status_code'] ?? '')));
+    if ($rawCode !== '') {
+        return $rawCode;
+    }
+
+    $text = trim((string)($event['title'] ?? '') . ' ' . (string)($event['note'] ?? ''));
+    $inferred = inferTrackingStatusFromVietnameseText($text);
+    return $inferred ?? 'in_transit';
+}
+
+function getStoredTrackingEvents(int $orderId): array
+{
+    try {
+        $tableExists = !empty(Database::fetchAll("SHOW TABLES LIKE 'order_tracking_events'"));
+        if (!$tableExists) {
+            return [];
+        }
+
+        $rows = Database::fetchAll(
+            "SELECT event_id, status_code, title, note, location_address, lat, lng, occurred_at
+             FROM order_tracking_events
+             WHERE order_id = ?
+             ORDER BY occurred_at ASC, event_id ASC",
+            [$orderId]
+        );
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $events = [];
+        foreach ($rows as $row) {
+            $event = [
+                'type' => 'tracking_event',
+                'status_code' => normalizeStatusCodeFromEvent($row),
+                'title' => trim((string)($row['title'] ?? '')) !== '' ? (string)$row['title'] : 'Cập nhật vận chuyển',
+                'note' => (string)($row['note'] ?? ''),
+                'location_address' => (string)($row['location_address'] ?? ''),
+                'lat' => isset($row['lat']) && $row['lat'] !== null ? (float)$row['lat'] : null,
+                'lng' => isset($row['lng']) && $row['lng'] !== null ? (float)$row['lng'] : null,
+                'occurred_at' => (string)($row['occurred_at'] ?? date('Y-m-d H:i:s')),
+            ];
+
+            if (($event['lat'] === null || $event['lng'] === null) && trim((string)$event['location_address']) !== '') {
+                $geo = geocodeAddressCached((string)$event['location_address']);
+                if ($geo) {
+                    $event['lat'] = (float)$geo['lat'];
+                    $event['lng'] = (float)$geo['lng'];
+                }
+            }
+
+            $events[] = $event;
+        }
+
+        return $events;
+    } catch (Exception $e) {
+        error_log('getStoredTrackingEvents failed: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function countDistinctTrackingPoints(array $events): int
+{
+    $seen = [];
+    foreach ($events as $ev) {
+        if (!is_array($ev)) {
+            continue;
+        }
+        if (!isset($ev['lat'], $ev['lng']) || !is_numeric($ev['lat']) || !is_numeric($ev['lng'])) {
+            continue;
+        }
+        $key = number_format((float)$ev['lat'], 5, '.', '') . ',' . number_format((float)$ev['lng'], 5, '.', '');
+        $seen[$key] = true;
+    }
+    return count($seen);
+}
+
+function hasNearPoint(array $events, float $lat, float $lng, float $eps = 0.00005): bool
+{
+    foreach ($events as $ev) {
+        if (!is_array($ev)) {
+            continue;
+        }
+        if (!isset($ev['lat'], $ev['lng']) || !is_numeric($ev['lat']) || !is_numeric($ev['lng'])) {
+            continue;
+        }
+        if (abs((float)$ev['lat'] - $lat) <= $eps && abs((float)$ev['lng'] - $lng) <= $eps) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function normalizeVietnameseText(string $text): string
 {
     $text = trim($text);
@@ -298,6 +441,53 @@ function warehouseWithMeta(array $warehouse): array
     return $warehouse;
 }
 
+function loadProvinceKeywords(): array
+{
+    static $cached = null;
+    if (is_array($cached)) {
+        return $cached;
+    }
+
+    $files = [
+        __DIR__ . '/../assets/data/province.json',
+        __DIR__ . '/../assets/data/tinh_tp.json',
+    ];
+
+    $keywords = ['ha noi', 'da nang', 'ho chi minh', 'tp ho chi minh', 'can tho', 'hai phong', 'hue'];
+
+    foreach ($files as $file) {
+        if (!is_file($file)) {
+            continue;
+        }
+        $raw = @file_get_contents($file);
+        if ($raw === false) {
+            continue;
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = trim((string)($item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $norm = normalizeVietnameseText($name);
+            if ($norm !== '') {
+                $keywords[] = $norm;
+            }
+        }
+    }
+
+    $keywords = array_values(array_unique($keywords));
+    usort($keywords, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+    $cached = $keywords;
+    return $cached;
+}
+
 function extractAddressHints(string $address): array
 {
     $segments = array_values(array_filter(array_map('trim', explode(',', $address))));
@@ -318,7 +508,7 @@ function extractAddressHints(string $address): array
         }
     }
 
-    $cityKeywords = ['ha noi', 'da nang', 'ho chi minh', 'tp ho chi minh', 'can tho', 'hai phong', 'hue'];
+    $cityKeywords = loadProvinceKeywords();
     foreach (array_reverse($segments) as $segment) {
         $norm = normalizeVietnameseText($segment);
         if ($norm === '' || $norm === 'viet nam') {
@@ -728,12 +918,27 @@ try {
     }
 
     $destinationAddress = trim((string)($order['shipping_address'] ?? ''));
-    $events = [];
+    $events = getStoredTrackingEvents((int)$order['order_id']);
     $hubEvents = [];
     $trackingStatus = resolveTrackingStatus($order);
+    if (!empty($events)) {
+        $lastStored = $events[count($events) - 1];
+        $trackingStatus = normalizeStatusCodeFromEvent($lastStored);
+    }
     $reachedHubCount = 0;
     $firstEvent = null;
     $lastEvent = null;
+    $destinationData = null;
+    $warehouseData = [
+        'name' => $warehouse['name'] ?? 'Warehouse',
+        'address' => $warehouse['address'] ?? 'Warehouse',
+        'city' => $warehouse['city'] ?? '',
+        'district' => $warehouse['district'] ?? '',
+        'lat' => (float)$warehouseLat,
+        'lng' => (float)$warehouseLng,
+        'place_id' => $warehousePlaceId !== '' ? $warehousePlaceId : null,
+    ];
+
     if ($destinationAddress !== '') {
         $destLat = null;
         $destLng = null;
@@ -753,21 +958,59 @@ try {
                 $destLng = $fallback['lng'];
             }
         }
-        $warehouseData = [
-            'name' => $warehouse['name'] ?? 'Warehouse',
-            'address' => $warehouse['address'] ?? 'Warehouse',
-            'city' => $warehouse['city'] ?? '',
-            'district' => $warehouse['district'] ?? '',
-            'lat' => (float)$warehouseLat,
-            'lng' => (float)$warehouseLng,
-            'place_id' => $warehousePlaceId !== '' ? $warehousePlaceId : null,
-        ];
         $destinationData = [
             'address' => $destinationAddress,
             'lat' => (float)$destLat,
             'lng' => (float)$destLng,
             'place_id' => $hasShippingGeo ? (($order['shipping_place_id'] ?? '') !== '' ? (string)$order['shipping_place_id'] : null) : null,
         ];
+    }
+
+    if (!empty($events) && $destinationData) {
+        $needsMovementAnchors = countDistinctTrackingPoints($events) < 2;
+        if ($needsMovementAnchors) {
+            $createdAt = (string)($order['created_at'] ?? date('Y-m-d H:i:s'));
+
+            $warehouseEvent = [
+                'type' => 'warehouse',
+                'status_code' => 'warehouse',
+                'title' => trim((string)($warehouseData['name'] ?? 'Kho hàng')),
+                'note' => 'Đơn hàng khởi hành từ kho.',
+                'location_address' => trim((string)($warehouseData['address'] ?? 'Kho hàng')),
+                'lat' => (float)($warehouseData['lat'] ?? 0),
+                'lng' => (float)($warehouseData['lng'] ?? 0),
+                'occurred_at' => $createdAt,
+            ];
+
+            $destinationEvent = [
+                'type' => 'destination',
+                'status_code' => 'destination',
+                'title' => 'Địa chỉ nhận hàng',
+                'note' => 'Điểm đến giao cho khách.',
+                'location_address' => trim((string)($destinationData['address'] ?? 'Địa chỉ giao hàng')),
+                'lat' => (float)($destinationData['lat'] ?? 0),
+                'lng' => (float)($destinationData['lng'] ?? 0),
+                'occurred_at' => date('Y-m-d H:i:s'),
+            ];
+
+            if (!hasNearPoint($events, (float)$warehouseEvent['lat'], (float)$warehouseEvent['lng'])) {
+                array_unshift($events, $warehouseEvent);
+            }
+
+            if (
+                in_array($trackingStatus, ['out_for_delivery', 'delivered', 'failed_delivery', 'returning', 'returned'], true)
+                && !hasNearPoint($events, (float)$destinationEvent['lat'], (float)$destinationEvent['lng'])
+            ) {
+                $events[] = $destinationEvent;
+            }
+
+            usort($events, static function (array $left, array $right): int {
+                return strcmp((string)($left['occurred_at'] ?? ''), (string)($right['occurred_at'] ?? ''));
+            });
+        }
+    }
+
+    if ($destinationAddress !== '' && empty($events) && $destinationData) {
 
         $hubEvents = buildTransitHubEvents($warehouseData, $destinationData, $destinationAddress, $logisticsConfig);
         $trackingContext = deriveTrackingContext($order, $hubEvents, $logisticsConfig);
@@ -788,9 +1031,10 @@ try {
 
         $events = $syntheticEvents;
 
-        $firstEvent = $events[0] ?? null;
-        $lastEvent = !empty($events) ? $events[count($events) - 1] : null;
     }
+
+    $firstEvent = $events[0] ?? null;
+    $lastEvent = !empty($events) ? $events[count($events) - 1] : null;
 
     api_json(true, [
         'order_id' => (int)$order['order_id'],

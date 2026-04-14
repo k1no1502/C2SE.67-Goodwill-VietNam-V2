@@ -5,7 +5,7 @@ require_once '../includes/functions.php';
 
 requireStaffOrAdmin();
 
-$pageTitle = 'Panel Đơn Hàng';
+$pageTitle = 'Tổng quan đơn hàng';
 $panelType = 'orders';
 
 // Restrict staff by approved job role (admin is always allowed)
@@ -66,13 +66,20 @@ try {
     }
 } catch (Exception $e) {}
 
-// ─── Doughnut chart: order status distribution ─────────────────────────────
-$statusChart = [];
+// ─── Doughnut chart: direct vs online order groups ────────────────────────
+$orderTypeChart = [];
 try {
-    $statusChart = Database::fetchAll("
-        SELECT status AS label, COUNT(*) AS total
-        FROM orders
-        GROUP BY status
+    $orderTypeChart = Database::fetchAll(" 
+        SELECT order_group AS label, COUNT(*) AS total
+        FROM (
+            SELECT CASE
+                WHEN o.shipping_method = 'pickup' THEN 'direct'
+                WHEN o.status = 'delivered' THEN 'online_delivered'
+                ELSE 'online_undelivered'
+            END AS order_group
+            FROM orders o
+        ) grouped_orders
+        GROUP BY order_group
     ");
 } catch (Exception $e) {}
 
@@ -81,6 +88,7 @@ $recentOrders = [];
 try {
     $recentOrders = Database::fetchAll("
         SELECT o.order_id, o.status, o.total_amount, o.created_at,
+               o.shipping_method, o.shipping_note,
                u.name AS customer_name
         FROM orders o
         LEFT JOIN users u ON o.user_id = u.user_id
@@ -95,6 +103,11 @@ $statusLabels = [
     'shipping'  => ['text' => 'Đang giao',    'class' => 'primary'],
     'delivered' => ['text' => 'Đã giao',      'class' => 'success'],
     'cancelled' => ['text' => 'Đã huỷ',       'class' => 'danger'],
+];
+
+$orderTypeLabels = [
+    'direct' => ['text' => 'Trực tiếp', 'class' => 'success-subtle text-success-emphasis'],
+    'online' => ['text' => 'Online', 'class' => 'primary-subtle text-primary-emphasis'],
 ];
 ?>
 <!DOCTYPE html>
@@ -111,20 +124,68 @@ $statusLabels = [
         body { background: #f3f9fc; }
         .admin-content { padding-top: 1rem; padding-bottom: 1.5rem; }
 
-        .dashboard-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
-            border-radius: 22px;
-            padding: 1rem 1.45rem;
-            margin-top: .35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8,74,92,.07);
+        .orders-topbar {
+            background: transparent;
+            border: 0;
+            border-radius: 16px;
+            padding: 0.15rem 0 0.25rem;
+            color: #0f172a;
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
+            box-shadow: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
-        .dashboard-topbar h1 {
-            margin: 0; color: #0f172a; font-weight: 800;
-            font-size: clamp(1.6rem, 2.5vw, 2.4rem); line-height: 1.1;
+        .orders-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
         }
-        .dashboard-note { color: #64748b; font-size: .95rem; margin-top: .4rem; }
+        .orders-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+        .orders-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .orders-topbar-title {
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: 0.1px;
+            margin: 0;
+            color: #0f172a;
+        }
+        .orders-topbar-sub  {
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin: 0.35rem 0 0;
+            line-height: 1.25;
+        }
+        @media (max-width: 767.98px) {
+            .orders-topbar { padding: 0.05rem 0 0.25rem; }
+            .orders-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+            .orders-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .orders-head-icon i { font-size: 1.45rem; }
+            .orders-topbar-sub { font-size: 1rem; }
+        }
 
         .stat-card {
             border: 1px solid #d7edf3; border-radius: 16px;
@@ -162,16 +223,15 @@ $statusLabels = [
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
 
             <!-- Top bar -->
-            <div class="dashboard-topbar d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center gap-3">
-                <div>
-                    <h1><i class="bi bi-cart-check me-2"></i>Đơn Hàng</h1>
-                    <div class="dashboard-note">Theo dõi và xử lý đơn hàng — Goodwill Vietnam</div>
-                </div>
-                <div class="btn-toolbar mb-2 mb-md-0">
-                    <a href="orders.php" class="btn btn-sm"
-                       style="background:#e0f4fa;color:#0b728c;border:1px solid #9fd8e6;border-radius:12px;font-weight:700;padding:.55rem 1.2rem;">
-                        <i class="bi bi-cart-check me-1"></i>Quản lý đơn hàng
-                    </a>
+            <div class="orders-topbar">
+                <div class="orders-head">
+                    <div class="orders-head-icon">
+                        <i class="bi bi-cart-check"></i>
+                    </div>
+                    <div>
+                        <h1 class="orders-topbar-title">Tổng quan đơn hàng</h1>
+                        <p class="orders-topbar-sub">Theo dõi và xử lý toàn bộ đơn hàng của hệ thống</p>
+                    </div>
                 </div>
             </div>
 
@@ -252,7 +312,7 @@ $statusLabels = [
                 <div class="col-xl-4 col-lg-5">
                     <div class="card dashboard-card mb-4">
                         <div class="card-header dashboard-card-header">
-                            <h6 class="dashboard-card-title">Phân bổ trạng thái đơn</h6>
+                            <h6 class="dashboard-card-title">Phân loại đơn hàng</h6>
                         </div>
                         <div class="card-body">
                             <div class="chart-pie pt-4 pb-2">
@@ -280,6 +340,7 @@ $statusLabels = [
                                         <tr>
                                             <th class="px-3 py-2">#</th>
                                             <th class="py-2">Khách hàng</th>
+                                            <th class="py-2">Loại đơn</th>
                                             <th class="py-2">Tổng tiền</th>
                                             <th class="py-2">Trạng thái</th>
                                             <th class="py-2">Ngày đặt</th>
@@ -287,12 +348,25 @@ $statusLabels = [
                                     </thead>
                                     <tbody>
                                         <?php if (empty($recentOrders)): ?>
-                                        <tr><td colspan="5" class="text-center text-muted py-4">Chưa có đơn hàng nào</td></tr>
+                                        <tr><td colspan="6" class="text-center text-muted py-4">Chưa có đơn hàng nào</td></tr>
                                         <?php endif; ?>
                                         <?php foreach ($recentOrders as $order): ?>
+                                        <?php
+                                            $shippingMethod = strtolower(trim((string)($order['shipping_method'] ?? '')));
+                                            $shippingNote = strtolower(trim((string)($order['shipping_note'] ?? '')));
+                                            $orderTypeKey = ($shippingMethod === 'pickup' || str_contains($shippingNote, 'trực tiếp') || str_contains($shippingNote, 'mua tại quầy'))
+                                                ? 'direct'
+                                                : 'online';
+                                            $typeMeta = $orderTypeLabels[$orderTypeKey] ?? $orderTypeLabels['online'];
+                                        ?>
                                         <tr>
                                             <td class="px-3 py-2 text-muted">#<?php echo (int)$order['order_id']; ?></td>
                                             <td class="py-2 fw-semibold"><?php echo htmlspecialchars($order['customer_name'] ?? 'Ẩn danh'); ?></td>
+                                            <td class="py-2">
+                                                <span class="badge rounded-pill bg-<?php echo $typeMeta['class']; ?>">
+                                                    Loại đơn: <?php echo $typeMeta['text']; ?>
+                                                </span>
+                                            </td>
                                             <td class="py-2">
                                                 <?php echo $order['total_amount'] !== null
                                                     ? number_format((float)$order['total_amount'], 0, ',', '.') . ' đ'
@@ -356,10 +430,18 @@ new Chart(document.getElementById('orderTrendChart').getContext('2d'), {
     }
 });
 
-// Doughnut — order status
-const stData   = <?php echo json_encode($statusChart, JSON_UNESCAPED_UNICODE); ?>;
-const stLabels = { pending:'Chờ xử lý', confirmed:'Đã xác nhận', shipping:'Đang giao', delivered:'Đã giao', cancelled:'Đã huỷ' };
-const stColors = { pending:'#f59e0b', confirmed:'#38bdf8', shipping:'#0891b2', delivered:'#22c55e', cancelled:'#ef4444' };
+// Doughnut — direct / online order groups
+const stData   = <?php echo json_encode($orderTypeChart, JSON_UNESCAPED_UNICODE); ?>;
+const stLabels = {
+    direct: 'Đơn trực tiếp',
+    online_undelivered: 'Online chưa giao',
+    online_delivered: 'Online đã giao'
+};
+const stColors = {
+    direct: '#0ea5a4',
+    online_undelivered: '#f59e0b',
+    online_delivered: '#22c55e'
+};
 
 new Chart(document.getElementById('statusDoughnutChart').getContext('2d'), {
     type: 'doughnut',

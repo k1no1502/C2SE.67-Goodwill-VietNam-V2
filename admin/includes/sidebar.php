@@ -16,6 +16,8 @@ $pendingDonations = 0;
 $pendingFeedback = 0;
 $pendingCampaigns = 0;
 $pendingRecruitment = 0;
+$pendingOrders = 0;
+$pendingNotifications = 0;
 
 try {
     $result = Database::fetch("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
@@ -43,6 +45,20 @@ try {
     $pendingRecruitment = $result ? ($result['count'] ?? 0) : 0;
 } catch (Exception $e) {
     $pendingRecruitment = 0;
+}
+
+try {
+    $result = Database::fetch("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'");
+    $pendingOrders = $result ? ($result['count'] ?? 0) : 0;
+} catch (Exception $e) {
+    $pendingOrders = 0;
+}
+
+try {
+    $result = Database::fetch("SELECT COUNT(*) as count FROM admin_notifications WHERE status = 'scheduled'");
+    $pendingNotifications = $result ? ($result['count'] ?? 0) : 0;
+} catch (Exception $e) {
+    $pendingNotifications = 0;
 }
 ?>
 <style>
@@ -107,7 +123,18 @@ try {
 
 .sidebar-menu-item .badge {
     font-size: 0.68rem;
-    padding: 0.16rem 0.38rem;
+    font-weight: 700;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    margin-left: auto;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, .95);
 }
 
 .sidebar-footer {
@@ -236,16 +263,16 @@ try {
         <!-- Main Menu -->
         <ul class="sidebar-menu">
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'dashboard' ? 'active' : ''; ?>" href="dashboard.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'dashboard' ? 'active' : ''; ?>" href="/admin/dashboard.php">
                     <i class="bi bi-speedometer2"></i>
                     <span>Tổng quan</span>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'donations' ? 'active' : ''; ?>" href="donations.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'donations' ? 'active' : ''; ?>" href="/admin/donations.php">
                     <i class="bi bi-heart-fill"></i>
-                    <span>Duyệt độ quyên góp</span>
+                    <span>Quản lý quyên góp</span>
                     <?php if ($pendingDonations > 0): ?>
                         <span class="badge"><?php echo $pendingDonations; ?></span>
                     <?php endif; ?>
@@ -253,44 +280,60 @@ try {
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'inventory' ? 'active' : ''; ?>" href="inventory.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'inventory' ? 'active' : ''; ?>" href="/admin/inventory.php">
                     <i class="bi bi-box-seam"></i>
-                    <span>Đơn quyên góp</span>
+                    <span>Quản lý Kho Hàng</span>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'orders' ? 'active' : ''; ?>" href="orders.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'orders' ? 'active' : ''; ?>" href="/admin/orders.php">
                     <i class="bi bi-cart-check"></i>
-                    <span>Quản lý Sản phẩm</span>
+                    <span>Quản lý đơn hàng</span>
+                    <?php if ($pendingOrders > 0): ?>
+                        <span class="badge"><?php echo $pendingOrders; ?></span>
+                    <?php endif; ?>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'campaigns' ? 'active' : ''; ?>" href="campaigns.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'campaigns' ? 'active' : ''; ?>" href="/admin/campaigns.php">
                     <i class="bi bi-box2"></i>
-                    <span>Kho cửa hàng</span>
+                    <span>Quản lý chiến dịch</span>
+                    <?php if ($pendingCampaigns > 0): ?>
+                        <span class="badge"><?php echo $pendingCampaigns; ?></span>
+                    <?php endif; ?>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'categories' ? 'active' : ''; ?>" href="categories.php">
-                    <i class="bi bi-people"></i>
-                    <span>Quản lý Người dùng</span>
+                <a class="sidebar-menu-item <?php echo $currentPage === 'users' ? 'active' : ''; ?>" href="/admin/users.php">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Quản lý người dùng</span>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'feedback' ? 'active' : ''; ?>" href="feedback.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'staff-management' ? 'active' : ''; ?>" href="/admin/staff-management.php">
+                    <i class="bi bi-person-workspace"></i>
+                    <span>Quản lý nhân viên</span>
+                </a>
+            </li>
+
+            <li class="sidebar-item">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'feedback' ? 'active' : ''; ?>" href="/admin/feedback.php">
                     <i class="bi bi-building"></i>
-                    <span>Tuyển dụng</span>
+                    <span>Quản lý phản hồi</span>
+                    <?php if ($pendingFeedback > 0): ?>
+                        <span class="badge"><?php echo $pendingFeedback; ?></span>
+                    <?php endif; ?>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'recruitment-applications' ? 'active' : ''; ?>" href="recruitment-applications.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'recruitment-applications' ? 'active' : ''; ?>" href="/admin/recruitment-applications.php">
                     <i class="bi bi-lightning-charge-fill"></i>
-                    <span>Chiến dịch</span>
+                    <span>Quản lý Tuyển dụng</span>
                     <?php if ($pendingRecruitment > 0): ?>
                         <span class="badge"><?php echo $pendingRecruitment; ?></span>
                     <?php endif; ?>
@@ -298,21 +341,31 @@ try {
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo $currentPage === 'notifications' ? 'active' : ''; ?>" href="notifications.php">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'notifications' ? 'active' : ''; ?>" href="/admin/notifications.php">
                     <i class="bi bi-gear-fill"></i>
+                    <span>Quản lý thông báo</span>
+                    <?php if ($pendingNotifications > 0): ?>
+                        <span class="badge"><?php echo $pendingNotifications; ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+
+            <li class="sidebar-item">
+                <a class="sidebar-menu-item <?php echo $currentPage === 'settings' ? 'active' : ''; ?>" href="/admin/settings.php">
+                    <i class="bi bi-sliders"></i>
                     <span>Cài đặt hệ thống</span>
                 </a>
             </li>
 
             <li class="sidebar-item">
-                <a class="sidebar-menu-item <?php echo in_array($currentPage, ['reports', 'reports_export', 'export_reports', 'dashboard_export'], true) ? 'active' : ''; ?>" href="reports.php">
+                <a class="sidebar-menu-item <?php echo in_array($currentPage, ['reports', 'reports_export', 'export_reports', 'dashboard_export'], true) ? 'active' : ''; ?>" href="/admin/reports.php">
                     <i class="bi bi-bar-chart-line-fill"></i>
                     <span>Báo cáo</span>
                 </a>
             </li>
 
             <li class="sidebar-item sidebar-item-home">
-                <a class="sidebar-menu-item" href="../index.php">
+                <a class="sidebar-menu-item" href="/index.php">
                     <i class="bi bi-house-heart-fill"></i>
                     <span>Về Trang chủ</span>
                 </a>
@@ -321,7 +374,7 @@ try {
 
         <!-- Logout Button -->
         <div class="sidebar-footer">
-            <a href="../logout.php" class="btn-logout">
+            <a href="/logout.php" class="btn-logout">
                 <i class="bi bi-box-arrow-right"></i>
                 <span>Đăng xuất</span>
             </a>

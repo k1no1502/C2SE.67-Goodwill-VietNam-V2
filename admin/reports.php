@@ -154,14 +154,69 @@ $recentDonations = Database::fetchAll(
         body { background: #f3f9fc; }
 
         .reports-topbar {
-            background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 22px 28px;
-            color: #fff;
-            margin: 1rem 0 1.5rem;
+            padding: 0.15rem 0 0.25rem;
+            color: #0f172a;
+            margin: 0.2rem 0 1rem;
+            box-shadow: none;
         }
-        .reports-topbar h1 { font-size: 1.45rem; font-weight: 700; margin: 0; }
-        .reports-topbar p { margin: 4px 0 0; opacity: .82; font-size: .88rem; }
+
+        .reports-head {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .reports-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .reports-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .reports-topbar h1 {
+            margin: 0;
+            color: #0f172a;
+            font-weight: 900;
+            letter-spacing: 0.1px;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            line-height: 1.08;
+        }
+
+        .reports-topbar p {
+            margin: 0.35rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            line-height: 1.25;
+        }
+
+        @media (max-width: 767.98px) {
+            .reports-topbar { padding: 0.05rem 0 0.25rem; }
+            .reports-head {
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+            .reports-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+            .reports-head-icon i { font-size: 1.45rem; }
+            .reports-topbar p { font-size: 1rem; }
+        }
 
         .filter-card,
         .report-panel {
@@ -305,8 +360,15 @@ $recentDonations = Database::fetchAll(
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="reports-topbar">
-                    <h1><i class="bi bi-graph-up me-2"></i>Báo cáo thống kê</h1>
-                    <p>Tổng hợp hiệu suất quyên góp, chiến dịch và vận hành kho theo thời gian.</p>
+                    <div class="reports-head">
+                        <div class="reports-head-icon">
+                            <i class="bi bi-graph-up"></i>
+                        </div>
+                        <div>
+                            <h1>Báo cáo thống kê</h1>
+                            <p>Tổng hợp hiệu suất quyên góp, chiến dịch và vận hành kho theo thời gian.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Date Range Filter -->

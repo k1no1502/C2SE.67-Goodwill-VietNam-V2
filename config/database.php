@@ -28,9 +28,42 @@ try {
     $pdo->exec("SET time_zone = '+07:00'");
     
 } catch (PDOException $e) {
-    // Log error and show user-friendly message
+        // Log error and serve an HTML fallback for browser requests.
     error_log("Database connection failed: " . $e->getMessage());
-    die("Kết nối cơ sở dữ liệu thất bại. Vui lòng thử lại sau.");
+
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $isApiRequest = str_starts_with($requestUri, '/api/') || stripos($acceptHeader, 'application/json') !== false;
+
+        if (!headers_sent()) {
+            http_response_code(500);
+        }
+
+        if ($isApiRequest) {
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=UTF-8');
+            }
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Cơ sở dữ liệu chưa được bật hoặc chưa tồn tại.'
+            ], JSON_UNESCAPED_UNICODE);
+            exit();
+        }
+
+        $errorPage = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'db-error.html';
+
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=UTF-8');
+        }
+
+        if (is_file($errorPage)) {
+            readfile($errorPage);
+        } else {
+            echo 'Cơ sở dữ liệu chưa được bật hoặc chưa tồn tại.';
+        }
+
+        exit();
 }
 
 /**
@@ -55,7 +88,7 @@ class Database {
     }
     
     /**
-     * Fetch single row
+     Fetch single row
      */
     public static function fetch($sql, $params = []) {
         $stmt = self::execute($sql, $params);

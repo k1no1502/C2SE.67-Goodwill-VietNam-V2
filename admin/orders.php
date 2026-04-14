@@ -103,7 +103,7 @@ function getCarrierLabel(?string $carrier): string
 {
     $key = strtolower(trim((string)$carrier));
     return match ($key) {
-        'viettelpost', 'viettel post', 'vtp' => 'ViettelPost',
+        'viettelpost', 'viettel post', 'vtp' => 'Giao Hàng Nhanh',
         'ghn' => 'GHN',
         'ghtk' => 'GHTK',
         'j&t', 'jt', 'jnt' => 'J&T Express',
@@ -117,6 +117,8 @@ function getCarrierStatusMeta(?string $status): array
 {
     $status = strtolower(trim((string)$status));
     return match ($status) {
+        'payment_completed' => ['class' => 'success', 'text' => 'Đã thanh toán'],
+        'payment_pending' => ['class' => 'warning', 'text' => 'Chưa hoàn tất thanh toán'],
         'created' => ['class' => 'secondary', 'text' => 'Đã tạo vận đơn'],
         'waiting_pickup' => ['class' => 'warning', 'text' => 'Chờ lấy hàng'],
         'picked_up' => ['class' => 'info', 'text' => 'Đã lấy hàng'],
@@ -138,6 +140,7 @@ $deliveredStatusKey = in_array('delivered', $validStatuses, true) ? 'delivered' 
 
 // Detect history table once so we can log safely in POST handler
 $historyTableExists = !empty(Database::fetchAll("SHOW TABLES LIKE 'order_status_history'"));
+$trackingEventsTableExists = !empty(Database::fetchAll("SHOW TABLES LIKE 'order_tracking_events'"));
 
 // Handle status update / cancel
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -236,7 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $statusToApply = $shippingStatusKey;
                     } elseif (in_array($last_mile_status, ['out_for_delivery', 'in_transit', 'picked_up', 'failed_delivery', 'returning', 'returned'], true)) {
                         $statusToApply = $shippingStatusKey;
-                    } elseif (in_array($last_mile_status, ['waiting_pickup', 'created'], true)) {
+                    } elseif (in_array($last_mile_status, ['payment_completed', 'waiting_pickup', 'created'], true)) {
                         $statusToApply = $confirmedStatusKey;
                     }
                 }
@@ -267,6 +270,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         );
                     }
                 }
+
+                    // Store real tracking event for customer-facing tracking timeline.
+                    if ($trackingEventsTableExists && $last_mile_status !== '' && $oldCarrierStatus !== $last_mile_status) {
+                        $trackingTitleMap = [
+                            'payment_completed' => 'Đã thanh toán',
+                            'payment_pending' => 'Chưa hoàn tất thanh toán',
+                            'created' => 'Đã tạo vận đơn',
+                            'waiting_pickup' => 'Chờ lấy hàng',
+                            'picked_up' => 'Đã lấy hàng',
+                            'in_transit' => 'Đang trung chuyển',
+                            'out_for_delivery' => 'Đang giao cho khách',
+                            'delivered' => 'Giao hàng thành công',
+                            'failed_delivery' => 'Giao hàng thất bại',
+                            'returning' => 'Đang chuyển hoàn',
+                            'returned' => 'Đã hoàn hàng',
+                        ];
+
+                        $trackingTitle = $trackingTitleMap[$last_mile_status] ?? ('Cập nhật: ' . $last_mile_status);
+                        $trackingNote = $admin_note !== '' ? $admin_note : 'Cập nhật từ trang quản trị đơn hàng.';
+                        $trackingLocation = trim((string)($order['shipping_address'] ?? ''));
+
+                        if (in_array($last_mile_status, ['created', 'waiting_pickup', 'picked_up', 'in_transit'], true)) {
+                            $logisticsConfigPath = __DIR__ . '/../config/logistics.php';
+                            $logisticsConfig = file_exists($logisticsConfigPath) ? require $logisticsConfigPath : [];
+                            $warehouseAddress = trim((string)($logisticsConfig['warehouse']['address'] ?? ''));
+                            if ($warehouseAddress !== '') {
+                                $trackingLocation = $warehouseAddress;
+                            }
+                        }
+
+                        Database::execute(
+                            "INSERT INTO order_tracking_events (order_id, status_code, title, note, location_address, occurred_at, created_by)
+                             VALUES (?, ?, ?, ?, ?, NOW(), ?)",
+                            [
+                                $order_id,
+                                $last_mile_status,
+                                $trackingTitle,
+                                $trackingNote,
+                                $trackingLocation,
+                                (int)$_SESSION['user_id'],
+                            ]
+                        );
+                    }
 
                 Database::commit();
                 setFlashMessage('success', 'Da cap nhat thong tin van chuyen.');
@@ -393,7 +439,7 @@ $users = Database::fetchAll("SELECT user_id, name, email FROM users ORDER BY nam
 
 $carrierOptions = [
     '' => 'Tất cả',
-    'viettelpost' => 'ViettelPost',
+    'viettelpost' => 'Giao Hàng Nhanh',
 ];
 
 $serviceOptions = [
@@ -459,46 +505,66 @@ $pageTitle = "Quản lý đơn hàng";
 
         /* ── Topbar ── */
         .orders-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 1rem 1.1rem;
+            padding: 0.15rem 0 0.25rem;
             color: #0f172a;
-            margin-top: 0.35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            margin-top: 0.2rem;
+            margin-bottom: 1rem;
+            box-shadow: none;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
             gap: 12px;
         }
-        .orders-topbar-title {
-            font-size: clamp(2rem, 3vw, 3.4rem);
-            font-weight: 800;
-            line-height: 1.05;
-            letter-spacing: 0.2px;
-            margin: 0;
+        .orders-head {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
+            gap: 0.9rem;
+        }
+        .orders-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+        .orders-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .orders-topbar-title {
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: 0.1px;
+            margin: 0;
             color: #0f172a;
         }
-        .orders-topbar-title i {
-            font-size: 0.9em;
-        }
         .orders-topbar-sub  {
-            color: #64748b;
-            font-size: clamp(0.95rem, 1.2vw, 1.08rem);
-            margin: 0.45rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin: 0.35rem 0 0;
+            line-height: 1.25;
         }
         @media (max-width: 767.98px) {
-            .orders-topbar {
-                padding: 1rem;
+            .orders-topbar { padding: 0.05rem 0 0.25rem; }
+            .orders-head {
+                gap: 0.72rem;
+                align-items: flex-start;
             }
-            .orders-topbar-title {
-                font-size: 2rem;
+            .orders-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
             }
+            .orders-head-icon i { font-size: 1.45rem; }
+            .orders-topbar-sub { font-size: 1rem; }
         }
 
         /* ── Stat cards ── */
@@ -695,9 +761,14 @@ $pageTitle = "Quản lý đơn hàng";
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="orders-topbar">
-                    <div>
-                        <h1 class="orders-topbar-title"><i class="bi bi-cart-check me-2"></i>Quản lý đơn hàng</h1>
-                        <p class="orders-topbar-sub">Theo dõi và xử lý toàn bộ đơn hàng của hệ thống</p>
+                    <div class="orders-head">
+                        <div class="orders-head-icon">
+                            <i class="bi bi-cart-check"></i>
+                        </div>
+                        <div>
+                            <h1 class="orders-topbar-title">Quản lý đơn hàng</h1>
+                            <p class="orders-topbar-sub">Theo dõi và xử lý toàn bộ đơn hàng của hệ thống</p>
+                        </div>
                     </div>
                 </div>
 
@@ -891,6 +962,27 @@ $pageTitle = "Quản lý đơn hàng";
 	                                            $trackingUrl = buildTrackingUrl(($order['shipping_carrier'] ?? '') !== '' ? $order['shipping_carrier'] : 'viettelpost', $trackingCode);
                                             $carrierStatusMeta = getCarrierStatusMeta($order['shipping_last_mile_status'] ?? '');
                                             $shippingFee = (float)($order['shipping_fee'] ?? 0);
+
+                                                $shippingMethod = strtolower(trim((string)($order['shipping_method'] ?? '')));
+                                                $shippingAddress = trim((string)($order['shipping_address'] ?? ''));
+                                                $shippingPhone = trim((string)($order['shipping_phone'] ?? ''));
+                                                $shippingPlaceId = trim((string)($order['shipping_place_id'] ?? ''));
+                                                $shippingLat = (string)($order['shipping_lat'] ?? '');
+                                                $shippingLng = (string)($order['shipping_lng'] ?? '');
+                                                $shippingNoteRaw = trim((string)($order['shipping_note'] ?? ''));
+                                                $shippingNote = function_exists('mb_strtolower')
+                                                    ? mb_strtolower($shippingNoteRaw, 'UTF-8')
+                                                    : strtolower($shippingNoteRaw);
+
+                                                $hasDeliveryAddress = ($shippingAddress !== '' || $shippingPhone !== '' || $shippingPlaceId !== '' || $shippingLat !== '' || $shippingLng !== '');
+                                                $isCounterOrderByNote = str_contains($shippingNote, 'trực tiếp')
+                                                    || str_contains($shippingNote, 'tai quay')
+                                                    || str_contains($shippingNote, 'tại quầy');
+
+                                                // Only classify as direct order when there is no delivery destination data.
+                                                $isDirectOrder = ($shippingMethod === 'pickup' && !$hasDeliveryAddress)
+                                                    || ($isCounterOrderByNote && !$hasDeliveryAddress);
+                                            $orderTypeLabel = $isDirectOrder ? 'Trực tiếp' : 'Online ship';
                                             ?>
                                     <tr>
                                         <td><span style="font-weight:600;color:var(--brand-700)">#<?php echo str_pad($order['order_id'], 6, '0', STR_PAD_LEFT); ?></span></td>
@@ -912,56 +1004,70 @@ $pageTitle = "Quản lý đơn hàng";
                                         <td>
                                             <span class="status-badge bg-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span>
                                             <div class="mt-1" style="font-size:.78rem;color:var(--ink-500)">
-                                                <i class="bi bi-truck me-1"></i><?php echo htmlspecialchars($carrierLabel); ?>
-                                                <?php if (!empty($trackingCode)): ?>
-                                                    <?php if ($trackingUrl): ?>
-                                                        — <a href="<?php echo htmlspecialchars($trackingUrl); ?>" target="_blank" rel="noopener" style="color:var(--brand-700)"><?php echo htmlspecialchars($trackingCode); ?></a>
-                                                    <?php else: ?>
-                                                        — <?php echo htmlspecialchars($trackingCode); ?>
+                                                <i class="bi bi-tags me-1"></i>Loại đơn hàng: <strong><?php echo htmlspecialchars($orderTypeLabel); ?></strong>
+                                            </div>
+                                            <?php if (!$isDirectOrder): ?>
+                                                <div class="mt-1" style="font-size:.78rem;color:var(--ink-500)">
+                                                    <i class="bi bi-truck me-1"></i><?php echo htmlspecialchars($carrierLabel); ?>
+                                                    <?php if (!empty($trackingCode)): ?>
+                                                        <?php if ($trackingUrl): ?>
+                                                            — <a href="<?php echo htmlspecialchars($trackingUrl); ?>" target="_blank" rel="noopener" style="color:var(--brand-700)"><?php echo htmlspecialchars($trackingCode); ?></a>
+                                                        <?php else: ?>
+                                                            — <?php echo htmlspecialchars($trackingCode); ?>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div style="font-size:.78rem;margin-top:2px">
-                                                <?php if ($shippingFee > 0): ?>
-                                                    <span class="me-1" style="color:var(--ink-500)">Phí VC: <strong><?php echo number_format($shippingFee); ?>đ</strong></span>
-                                                <?php endif; ?>
-                                                <span class="status-badge bg-<?php echo htmlspecialchars($carrierStatusMeta['class']); ?>"><?php echo htmlspecialchars($carrierStatusMeta['text']); ?></span>
-                                            </div>
+                                                </div>
+                                                <div style="font-size:.78rem;margin-top:2px">
+                                                    <?php if ($shippingFee > 0): ?>
+                                                        <span class="me-1" style="color:var(--ink-500)">Phí VC: <strong><?php echo number_format($shippingFee); ?>đ</strong></span>
+                                                    <?php endif; ?>
+                                                    <span class="status-badge bg-<?php echo htmlspecialchars($carrierStatusMeta['class']); ?>"><?php echo htmlspecialchars($carrierStatusMeta['text']); ?></span>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="mt-1" style="font-size:.78rem;color:var(--ink-500)">
+                                                    <i class="bi bi-shop me-1"></i>Bán tại quầy, không vận chuyển.
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                         <td style="white-space:nowrap;font-size:.82rem"><?php echo date('d/m/Y', strtotime($order['created_at'])); ?><br><span style="color:var(--ink-500)"><?php echo date('H:i', strtotime($order['created_at'])); ?></span></td>
                                         <td>
-                                            <div class="orders-actions">
-                                                <a href="../order-detail.php?id=<?php echo $order['order_id']; ?>"
-                                                   class="orders-action-btn view" title="Xem chi tiết">
-                                                    <i class="bi bi-eye"></i>
-                                                </a>
-                                                <button type="button"
-                                                        class="orders-action-btn ship"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#logisticsModal<?php echo $order['order_id']; ?>"
-                                                        title="Vận chuyển">
-                                                    <i class="bi bi-truck"></i>
-                                                </button>
-                                                <a href="print-shipping-label.php?order_id=<?php echo $order['order_id']; ?>"
-                                                   class="orders-action-btn print"
-                                                   target="_blank" rel="noopener"
-                                                   title="In phiếu gửi">
-                                                    <i class="bi bi-printer"></i>
-                                                </a>
-                                                <?php if ($order['status'] !== 'cancelled'): ?>
-                                                    <form method="POST" class="d-inline"
-                                                          onsubmit="return confirm('Huỷ đơn hàng này?');">
-                                                        <input type="hidden" name="order_id" value="<?php echo $order['order_id']; ?>">
-                                                        <input type="hidden" name="action" value="cancel_order">
-                                                        <button type="submit" class="orders-action-btn cancel" title="Hủy đơn">
-                                                            <i class="bi bi-x-circle"></i>
-                                                        </button>
-                                                    </form>
-                                                <?php endif; ?>
-                                            </div>
+                                            <?php if (!$isDirectOrder): ?>
+                                                <div class="orders-actions">
+                                                    <a href="../order-detail.php?id=<?php echo $order['order_id']; ?>"
+                                                       class="orders-action-btn view" title="Xem chi tiết">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
+                                                    <button type="button"
+                                                            class="orders-action-btn ship"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#logisticsModal<?php echo $order['order_id']; ?>"
+                                                            title="Vận chuyển">
+                                                        <i class="bi bi-truck"></i>
+                                                    </button>
+                                                    <a href="print-shipping-label.php?order_id=<?php echo $order['order_id']; ?>"
+                                                       class="orders-action-btn print"
+                                                       target="_blank" rel="noopener"
+                                                       title="In phiếu gửi">
+                                                        <i class="bi bi-printer"></i>
+                                                    </a>
+                                                    <?php if ($order['status'] !== 'cancelled'): ?>
+                                                        <form method="POST" class="d-inline"
+                                                              onsubmit="return confirm('Huỷ đơn hàng này?');">
+                                                            <input type="hidden" name="order_id" value="<?php echo $order['order_id']; ?>">
+                                                            <input type="hidden" name="action" value="cancel_order">
+                                                            <button type="submit" class="orders-action-btn cancel" title="Hủy đơn">
+                                                                <i class="bi bi-x-circle"></i>
+                                                            </button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="text-muted" style="font-size:.82rem">--</span>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
 
+                                            <?php if (!$isDirectOrder): ?>
                                             <!-- Logistics Modal -->
                                             <div class="modal fade" id="logisticsModal<?php echo $order['order_id']; ?>" tabindex="-1" aria-hidden="true">
                                                 <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -984,7 +1090,7 @@ $pageTitle = "Quản lý đơn hàng";
 	                                                                    <div class="col-md-4">
 	                                                                        <label class="form-label">Đơn vị vận chuyển</label>
 	                                                                        <input type="hidden" name="shipping_carrier" value="viettelpost">
-	                                                                        <input type="text" class="form-control" value="ViettelPost" disabled>
+                                                                            <input type="text" class="form-control" value="Giao Hàng Nhanh" disabled>
 	                                                                    </div>
 	                                                                    <div class="col-md-4">
 	                                                                        <label class="form-label">Dịch vụ</label>
@@ -1048,6 +1154,8 @@ $pageTitle = "Quản lý đơn hàng";
                                                                             <option value="">-- Chọn --</option>
                                                                             <?php
                                                                             $carrierStatusOptions = [
+                                                                                'payment_completed' => 'Đã thanh toán',
+                                                                                'payment_pending' => 'Chưa hoàn tất thanh toán',
                                                                                 'created' => 'Đã tạo vận đơn    ',
                                                                                 'waiting_pickup' => 'Chờ lấy hàng',
                                                                                 'picked_up' => 'Đã lấy hàng',
@@ -1104,6 +1212,7 @@ $pageTitle = "Quản lý đơn hàng";
                                                     </div>
                                                 </div>
                                             </div>
+                                            <?php endif; ?>
                                 <?php endforeach; ?>
                                 <?php endif; ?>
                             </tbody>

@@ -116,13 +116,13 @@ $parentCategories = Database::fetchAll("
         }
 
         .categories-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
+            background: transparent;
+            border: 0;
             border-radius: 16px;
-            padding: 1rem 1.1rem;
+            padding: 0.15rem 0 0.25rem;
             color: #0f172a;
-            margin: 0.35rem 0 1.2rem;
-            box-shadow: 0 10px 24px rgba(8, 74, 92, 0.07);
+            margin: 0.2rem 0 1rem;
+            box-shadow: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -130,26 +130,44 @@ $parentCategories = Database::fetchAll("
             flex-wrap: wrap;
         }
 
-        .categories-title {
-            font-size: clamp(2rem, 3vw, 3.4rem);
-            font-weight: 800;
-            line-height: 1.05;
-            letter-spacing: 0.2px;
-            margin: 0;
+        .categories-head {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
+            gap: 0.9rem;
+        }
+
+        .categories-head-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
+            flex-shrink: 0;
+        }
+
+        .categories-head-icon i {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        .categories-title {
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            font-weight: 900;
+            line-height: 1.08;
+            letter-spacing: 0.1px;
+            margin: 0;
             color: #0f172a;
         }
 
-        .categories-title i {
-            font-size: 0.9em;
-        }
-
         .categories-subtitle {
-            color: #64748b;
-            font-size: clamp(0.95rem, 1.2vw, 1.08rem);
-            margin: 0.45rem 0 0;
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            margin: 0.35rem 0 0;
+            line-height: 1.25;
         }
 
         .btn-create-category {
@@ -170,12 +188,25 @@ $parentCategories = Database::fetchAll("
         }
 
         @media (max-width: 767.98px) {
-            .categories-topbar {
-                padding: 1rem;
+            .categories-topbar { padding: 0.05rem 0 0.25rem; }
+
+            .categories-head {
+                gap: 0.72rem;
+                align-items: flex-start;
             }
 
-            .categories-title {
-                font-size: 2rem;
+            .categories-head-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+            }
+
+            .categories-head-icon i {
+                font-size: 1.45rem;
+            }
+
+            .categories-subtitle {
+                font-size: 1rem;
             }
 
             .btn-create-category {
@@ -367,9 +398,14 @@ $parentCategories = Database::fetchAll("
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
                 <div class="categories-topbar">
-                    <div>
-                        <h1 class="categories-title"><i class="bi bi-tags me-2"></i>Quản lý danh mục</h1>
-                        <p class="categories-subtitle">Sắp xếp danh mục và cấu trúc phân cấp cho kho vật phẩm</p>
+                    <div class="categories-head">
+                        <div class="categories-head-icon">
+                            <i class="bi bi-tags"></i>
+                        </div>
+                        <div>
+                            <h1 class="categories-title">Quản lý danh mục</h1>
+                            <p class="categories-subtitle">Sắp xếp danh mục và cấu trúc phân cấp cho kho vật phẩm</p>
+                        </div>
                     </div>
                     <button type="button" class="btn-create-category" data-bs-toggle="modal" data-bs-target="#createModal">
                         <i class="bi bi-plus-circle me-1"></i>Thêm danh mục

@@ -104,19 +104,63 @@ $statusLabels = [
         .admin-content { padding-top: 1rem; padding-bottom: 1.5rem; }
 
         .dashboard-topbar {
-            background: linear-gradient(140deg, #f7fcfe 0%, #ecf7fb 100%);
-            border: 1px solid #d7edf3;
-            border-radius: 22px;
-            padding: 1rem 1.45rem;
-            margin-top: .35rem;
-            margin-bottom: 1.2rem;
-            box-shadow: 0 10px 24px rgba(8,74,92,.07);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: transparent;
+            border: 0;
+            border-radius: 16px;
+            padding: 0.15rem 0 0.3rem;
+            margin-top: 0.2rem;
+            margin-bottom: 1.05rem;
+            box-shadow: none;
+        }
+        .dashboard-topbar-icon {
+            width: 74px;
+            height: 74px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b728c, #095f75);
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            flex-shrink: 0;
+            box-shadow: 0 10px 20px rgba(8, 74, 92, 0.23);
         }
         .dashboard-topbar h1 {
-            margin: 0; color: #0f172a; font-weight: 800;
-            font-size: clamp(1.6rem, 2.5vw, 2.4rem); line-height: 1.1;
+            margin: 0;
+            color: #0f172a;
+            font-weight: 900;
+            font-size: clamp(1.7rem, 2.8vw, 2.9rem);
+            line-height: 1.08;
+            letter-spacing: 0.1px;
         }
-        .dashboard-note { color: #64748b; font-size: .95rem; margin-top: .4rem; }
+        .dashboard-note {
+            color: #58718a;
+            font-size: clamp(1rem, 1.35vw, 1.15rem);
+            line-height: 1.25;
+            margin-top: .35rem;
+            margin-bottom: 0;
+            font-weight: 700;
+        }
+
+        @media (max-width: 767.98px) {
+            .dashboard-topbar {
+                padding: 0.05rem 0 0.25rem;
+                gap: 0.72rem;
+                align-items: flex-start;
+            }
+
+            .dashboard-topbar-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+                font-size: 1.45rem;
+            }
+
+            .dashboard-note { font-size: 1rem; }
+        }
 
         .stat-card {
             border: 1px solid #d7edf3; border-radius: 16px;
@@ -159,16 +203,13 @@ $statusLabels = [
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 admin-content">
 
             <!-- Top bar -->
-            <div class="dashboard-topbar d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center gap-3">
-                <div>
-                    <h1><i class="bi bi-box-seam me-2"></i>Kho Hàng</h1>
-                    <div class="dashboard-note">Tổng quan về hàng tồn kho và quyên góp — Goodwill Vietnam</div>
+            <div class="dashboard-topbar">
+                <div class="dashboard-topbar-icon">
+                    <i class="bi bi-box-seam"></i>
                 </div>
-                <div class="btn-toolbar mb-2 mb-md-0">
-                    <a href="inventory.php" class="btn btn-sm"
-                       style="background:#e0f4fa;color:#0b728c;border:1px solid #9fd8e6;border-radius:12px;font-weight:700;padding:.55rem 1.2rem;">
-                        <i class="bi bi-box-seam me-1"></i>Vào Kho Hàng
-                    </a>
+                <div>
+                    <h1>Quản lý kho hàng</h1>
+                    <p class="dashboard-note">Theo dõi và cập nhật toàn bộ vật phẩm trong kho</p>
                 </div>
             </div>
 

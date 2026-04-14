@@ -14,7 +14,7 @@ try {
     } else {
         foreach ($donations as $donation) {
             $images = json_decode($donation['images'] ?? '[]', true);
-            $imageUrl = !empty($images) ? 'uploads/donations/' . $images[0] : 'uploads/donations/placeholder-default.svg';
+            $imageUrl = !empty($images) ? resolveDonationImageUrl((string)$images[0]) : 'uploads/donations/placeholder-default.svg';
             $statusClass = [
                 'pending' => 'warning',
                 'approved' => 'success',

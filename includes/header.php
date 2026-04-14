@@ -6,6 +6,8 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/notifications_helper.php';
 
+enforceCashierPanelOnly();
+
 $pageTitle = $pageTitle ?? "Goodwill Vietnam";
 
 processScheduledAdminNotifications();
@@ -61,6 +63,13 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             border-bottom: 1px solid #d8ebf1;
             z-index: 3000;
         }
+        :root {
+            --gw-brand: #177d98;
+            --gw-brand-dark: #125f76;
+            --gw-brand-soft: #d8edf3;
+            --gw-brand-soft-hover: #e7f4f8;
+            --gw-brand-border: #c8e2ea;
+        }
         .gw-navbar,
         .gw-navbar .container,
         .gw-navbar .navbar-collapse,
@@ -74,11 +83,11 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             font-weight: 800;
             font-size: 1.08rem;
             letter-spacing: 0.2px;
-            color: #0E7490 !important;
+            color: var(--gw-brand) !important;
             white-space: nowrap;
         }
         .navbar-brand i {
-            color: #0E7490;
+            color: var(--gw-brand);
         }
         .navbar-nav {
             align-items: center;
@@ -97,12 +106,12 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             font-size: 0.82rem;
         }
         .nav-link:hover {
-            color: #0E7490 !important;
-            background: #edf8fb;
+            color: var(--gw-brand) !important;
+            background: var(--gw-brand-soft-hover);
         }
         .nav-link.active {
-            color: #0E7490 !important;
-            background: #e2f3f8;
+            color: var(--gw-brand) !important;
+            background: var(--gw-brand-soft);
         }
         .nav-icon-link {
             width: 40px;
@@ -112,12 +121,12 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             justify-content: center;
             padding: 0 !important;
             border-radius: 999px;
-            border: 1px solid #d8ebf1;
+            border: 1px solid var(--gw-brand-border);
             background: #fff;
         }
         .nav-icon-link:hover {
-            background: #edf8fb;
-            border-color: #bfdde8;
+            background: var(--gw-brand-soft-hover);
+            border-color: #afd4df;
         }
         .gw-auth-btn {
             border-radius: 10px;
@@ -125,7 +134,7 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             padding: 0.5rem 0.95rem;
         }
         .gw-auth-btn-primary {
-            background: linear-gradient(135deg, #0E7490, #155e75);
+            background: linear-gradient(135deg, var(--gw-brand), var(--gw-brand-dark));
             color: #fff;
             border: none;
         }
@@ -134,12 +143,12 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             color: #fff;
         }
         .gw-auth-btn-outline {
-            border: 1.5px solid #0E7490;
-            color: #0E7490;
+            border: 1.5px solid var(--gw-brand);
+            color: var(--gw-brand);
             background: #fff;
         }
         .gw-auth-btn-outline:hover {
-            background: #0E7490;
+            background: var(--gw-brand);
             color: #fff;
         }
         .pulse {
@@ -151,7 +160,7 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             100% { transform: scale(1); }
         }
         .volunteer-btn {
-            background: linear-gradient(135deg, #0E7490, #155e75);
+            background: linear-gradient(135deg, var(--gw-brand), var(--gw-brand-dark));
             border: none;
             color: white;
             font-weight: 700;
@@ -227,7 +236,7 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
             max-height: min(72vh, 520px);
             margin-top: 0.8rem;
             padding: 0.55rem 0;
-            border: 1px solid #cfe4ec;
+            border: 1px solid var(--gw-brand-border);
             border-radius: 18px;
             background: rgba(255, 255, 255, 0.98);
             box-shadow: 0 22px 48px rgba(15, 23, 42, 0.16);
@@ -267,11 +276,11 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
         .user-dropdown-menu .dropdown-item:hover,
         .user-dropdown-menu .dropdown-item:focus {
             background: #eff8fb;
-            color: #0e7490;
+            color: var(--gw-brand);
         }
         .user-dropdown-menu .dropdown-item:hover i,
         .user-dropdown-menu .dropdown-item:focus i {
-            color: #0e7490;
+            color: var(--gw-brand);
         }
         @media (max-width: 1599.98px) {
             .main-nav .nav-link i {
@@ -471,29 +480,10 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
                                     <p class="user-dropdown-role">
                                         <strong>Vai trò:</strong>
                                         <?php 
-                                            // Use role_id for more reliable role mapping
-                                            $roleId = $_SESSION['role_id'] ?? null;
-                                            $roleDisplay = $_SESSION['role'] ?? 'Khách';
-                                            
-                                            // Map based on role_id (1=admin, 2=user, 3=guest, 4=staff)
-                                            if ($roleId === 1) {
-                                                $roleDisplay = 'Quản Trị Viên';
-                                            } elseif ($roleId === 2) {
-                                                $roleDisplay = 'Khách Hàng';
-                                            } elseif ($roleId === 3) {
-                                                $roleDisplay = 'Khách';
-                                            } elseif ($roleId === 4) {
-                                                $roleDisplay = 'Nhân Viên';
-                                            } else {
-                                                // Fallback to original role name if mapping fails
-                                                $roleDisplay = htmlspecialchars($roleDisplay, ENT_QUOTES, 'UTF-8');
-                                            }
-                                            
-                                            if ($roleId !== null) {
-                                                echo htmlspecialchars($roleDisplay, ENT_QUOTES, 'UTF-8');
-                                            } else {
-                                                echo htmlspecialchars($roleDisplay, ENT_QUOTES, 'UTF-8');
-                                            }
+                                            $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+                                            $currentRoleId = isset($_SESSION['role_id']) ? (int)$_SESSION['role_id'] : null;
+                                            $roleDisplay = getUserDisplayRole($currentUserId, $currentRoleId);
+                                            echo htmlspecialchars($roleDisplay, ENT_QUOTES, 'UTF-8');
                                         ?>
                                     </p>
                                 </li>
@@ -513,9 +503,26 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
                                 <li><a class="dropdown-item" href="feedback.php">
                                     <i class="bi bi-chat-dots me-2"></i>Phản hồi
                                 </a></li>
-                                <?php if (isAdmin() || isStaff()): ?>
+                                <?php if (isAdmin()): ?>
                                     <li><a class="dropdown-item" href="admin/dashboard.php">
-                                        <i class="bi bi-speedometer2 me-2"></i><?php echo isStaff() ? 'Staff Panel' : 'Admin Panel'; ?>
+                                        <i class="bi bi-speedometer2 me-2"></i>Admin Panel
+                                    </a></li>
+                                <?php elseif (isStaff()): ?>
+                                    <?php
+                                        $roleKey = mb_strtolower(trim((string)$roleDisplay), 'UTF-8');
+                                        $staffPanelLink = 'staff-panel.php';
+                                        if ($roleKey === 'quản lý kho hàng' || $roleKey === 'quan ly kho hang') {
+                                            $staffPanelLink = 'admin/warehouse-panel.php';
+                                        } elseif ($roleKey === 'quản lý đơn hàng' || $roleKey === 'quan ly don hang') {
+                                            $staffPanelLink = 'admin/orders-panel.php';
+                                        } elseif ($roleKey === 'quản lý chiến dịch' || $roleKey === 'quan ly chien dich') {
+                                            $staffPanelLink = 'admin/campaigns-panel.php';
+                                        } elseif ($roleKey === 'thu ngân' || $roleKey === 'thu ngan') {
+                                            $staffPanelLink = 'admin/cashier-direct-sale.php';
+                                        }
+                                    ?>
+                                    <li><a class="dropdown-item" href="<?php echo htmlspecialchars($staffPanelLink, ENT_QUOTES, 'UTF-8'); ?>">
+                                        <i class="bi bi-briefcase me-2"></i>Panel công việc
                                     </a></li>
                                 <?php endif; ?>
                                 <li><hr class="dropdown-divider"></li>

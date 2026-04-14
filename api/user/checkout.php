@@ -47,6 +47,7 @@ try {
     Database::beginTransaction();
 
     $hasShippingName = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_name'"));
+    $hasShippingMethod = !empty(Database::fetchAll("SHOW COLUMNS FROM orders LIKE 'shipping_method'"));
     $statusColumn = Database::fetch("SHOW COLUMNS FROM orders LIKE 'status'");
     $allowedStatuses = [];
     if (!empty($statusColumn['Type']) && strpos($statusColumn['Type'], 'enum(') === 0) {
@@ -57,19 +58,35 @@ try {
 
     if ($hasShippingName) {
         Database::execute(
-            "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address, shipping_note, payment_method, total_amount, total_items, status, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
-            [
-                (int)$user['user_id'],
-                $shipping_name,
-                $shipping_phone,
-                $shipping_address,
-                $shipping_note !== '' ? $shipping_note : null,
-                $payment_method,
-                $totalAmount,
-                $totalItems,
-                $orderStatus
-            ]
+            $hasShippingMethod
+                ? "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address, shipping_method, shipping_note, payment_method, total_amount, total_items, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
+                : "INSERT INTO orders (user_id, shipping_name, shipping_phone, shipping_address, shipping_note, payment_method, total_amount, total_items, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+            $hasShippingMethod
+                ? [
+                    (int)$user['user_id'],
+                    $shipping_name,
+                    $shipping_phone,
+                    $shipping_address,
+                    'delivery',
+                    $shipping_note !== '' ? $shipping_note : null,
+                    $payment_method,
+                    $totalAmount,
+                    $totalItems,
+                    $orderStatus
+                ]
+                : [
+                    (int)$user['user_id'],
+                    $shipping_name,
+                    $shipping_phone,
+                    $shipping_address,
+                    $shipping_note !== '' ? $shipping_note : null,
+                    $payment_method,
+                    $totalAmount,
+                    $totalItems,
+                    $orderStatus
+                ]
         );
     } else {
         $order_number = 'ORD-' . date('Ymd-His') . '-' . (int)$user['user_id'];
