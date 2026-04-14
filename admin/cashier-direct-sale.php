@@ -9,10 +9,53 @@ if (!isAdmin() && getStaffPanelKey() !== 'cashier') {
     exit();
 }
 
+// 1. Handle MoMo return URL result for POS (before displaying anything)
+if (isset($_GET['momo_return']) && $_GET['momo_return'] === '1' && isset($_GET['pos_order_id'])) {
+    $posOrderId = (int)$_GET['pos_order_id'];
+    $resultCode = (string)($_GET['resultCode'] ?? '');
+
+    $order = Database::fetch('SELECT * FROM orders WHERE order_id = ?', [$posOrderId]);
+    if ($order) {
+        if ($resultCode === '0') {
+            Database::execute('UPDATE orders SET payment_status = ?, status = ?, updated_at = NOW() WHERE order_id = ? AND payment_status = ?', ['paid', 'delivered', $posOrderId, 'pending']);
+            // Generate receipt to show instantly
+            $items = Database::fetchAll('SELECT item_name, quantity, subtotal FROM order_items WHERE order_id = ?', [$posOrderId]);
+            $_SESSION['pos_receipt'] = [
+                'order_id'       => $posOrderId,
+                'created_at'     => date('d/m/Y H:i:s', strtotime($order['created_at'])),
+                'customer_name'  => $order['shipping_name'] ?? '',
+                'payment_method' => 'momo',
+                'items'          => $items,
+                'total_amount'   => $order['total_amount'],
+            ];
+        } else {
+            $_SESSION['pos_error'] = 'Giao dịch MoMo bị hủy hoặc lỗi (Mã ' . $resultCode . ')';
+            Database::execute('UPDATE orders SET status = ?, updated_at = NOW() WHERE order_id = ? AND payment_status = ?', ['cancelled', $posOrderId, 'pending']);
+        }
+    } else {
+        $_SESSION['pos_error'] = 'Không tìm thấy thông tin đơn hàng POS (Mã ' . $posOrderId . ')';
+    }
+
+    header('Location: cashier-direct-sale.php');
+    exit;
+}
+
 $pageTitle  = 'Kho hàng mã vạch';
 $panelType  = 'cashier';
-$receipt    = null;
-$error      = '';
+
+if (isset($_SESSION['pos_receipt'])) {
+    $receipt = $_SESSION['pos_receipt'];
+    unset($_SESSION['pos_receipt']);
+} else if (!isset($receipt)) {
+    $receipt = null;
+}
+
+if (isset($_SESSION['pos_error'])) {
+    $error = $_SESSION['pos_error'];
+    unset($_SESSION['pos_error']);
+} else {
+    $error = isset($_GET['error']) ? trim($_GET['error']) : '';
+}
 
 if (isset($_GET['stock_snapshot']) && $_GET['stock_snapshot'] === '1') {
     header('Content-Type: application/json; charset=utf-8');
@@ -78,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
         if (!is_array($cart) || empty($cart)) {
             $error = 'Vui lòng chọn ít nhất 1 sản phẩm.';
-        } elseif (!in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
+        } elseif (!in_array($paymentMethod, ['cash', 'bank_transfer', 'momo'], true)) {
             $error = 'Phương thức thanh toán không hợp lệ.';
         } else {
             try {
@@ -135,20 +178,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                     throw new Exception('Không có dữ liệu giỏ hàng hợp lệ.');
                 }
 
-                $payment = $paymentMethod === 'cash' ? 'cod' : 'bank_transfer';
+                $payment = $paymentMethod === 'cash' ? 'cod' : ($paymentMethod === 'momo' ? 'momo' : 'bank_transfer');
+                $paymentStatus = $paymentMethod === 'momo' ? 'pending' : 'paid';
 
                 Database::execute(
                     "INSERT INTO orders
                         (user_id, shipping_name, shipping_address, shipping_method,
                          shipping_note, payment_method, payment_status, total_amount,
                          total_items, status, created_at, updated_at)
-                     VALUES (?, ?, ?, 'pickup', ?, ?, 'paid', ?, ?, 'delivered', NOW(), NOW())",
+                     VALUES (?, ?, ?, 'pickup', ?, ?, ?, ?, ?, 'delivered', NOW(), NOW())",
                     [
                         (int)($_SESSION['user_id'] ?? 0),
                         $customerName !== '' ? $customerName : 'Khách mua tại quầy',
                         'Mua tại quầy Goodwill Vietnam',
                         'Bán trực tiếp tại quầy thu ngân',
                         $payment,
+                        $paymentStatus,
                         $totalAmount,
                         $totalItems,
                     ]
@@ -176,6 +221,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
                 logActivity((int)($_SESSION['user_id'] ?? 0), 'cashier_direct_sale', 'Bill #' . $orderId);
                 Database::commit();
+
+                if ($paymentMethod === 'momo') {
+                    $paymentConfigPath = __DIR__ . '/../config/payment.php';
+                    $paymentConfig = file_exists($paymentConfigPath) ? require $paymentConfigPath : [];
+                    $momoCfg = $paymentConfig['momo'] ?? [];
+                    $requiredFields = ['partner_code', 'access_key', 'secret_key', 'endpoint'];
+                    foreach ($requiredFields as $field) {
+                        if (trim((string)($momoCfg[$field] ?? '')) === '') {
+                            throw new Exception('Thiếu cấu hình MoMo: ' . $field);
+                        }
+                    }
+
+                    $momoOrderId = 'POS' . $orderId . '_' . time();
+                    $requestId = $momoOrderId;
+                    $requestType = trim((string)($momoCfg['request_type'] ?? 'captureWallet'));
+                    
+                    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+                    $scheme = $isHttps ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                    $baseUrl = $scheme . '://' . $host;
+                    
+                    $redirectUrl = $baseUrl . '/admin/cashier-direct-sale.php?momo_return=1&pos_order_id=' . $orderId;
+                    $ipnUrl = $baseUrl . '/api/momo_checkout_notify.php';
+                    
+                    $extraData = base64_encode(json_encode([
+                        'order_id' => $orderId,
+                        'user_id' => (int)($_SESSION['user_id'] ?? 0),
+                        'is_pos' => 1
+                    ], JSON_UNESCAPED_UNICODE));
+                    
+                    $orderInfo = 'Thanh toán đơn hàng #' . $orderId . ' tại quầy';
+                    $amountStr = (string)((int)round($totalAmount));
+                    
+                    $rawHash = 'accessKey=' . $momoCfg['access_key']
+                        . '&amount=' . $amountStr
+                        . '&extraData=' . $extraData
+                        . '&ipnUrl=' . $ipnUrl
+                        . '&orderId=' . $momoOrderId
+                        . '&orderInfo=' . $orderInfo
+                        . '&partnerCode=' . $momoCfg['partner_code']
+                        . '&redirectUrl=' . $redirectUrl
+                        . '&requestId=' . $requestId
+                        . '&requestType=' . $requestType;
+                    
+                    $signature = hash_hmac('sha256', $rawHash, $momoCfg['secret_key']);
+                    
+                    $payload = [
+                        'partnerCode' => $momoCfg['partner_code'],
+                        'accessKey' => $momoCfg['access_key'],
+                        'requestId' => $requestId,
+                        'amount' => $amountStr,
+                        'orderId' => $momoOrderId,
+                        'orderInfo' => $orderInfo,
+                        'redirectUrl' => $redirectUrl,
+                        'ipnUrl' => $ipnUrl,
+                        'extraData' => $extraData,
+                        'requestType' => $requestType,
+                        'lang' => 'vi',
+                        'partnerName' => trim((string)($momoCfg['partner_name'] ?? 'Goodwill Vietnam')),
+                        'storeId' => trim((string)($momoCfg['store_id'] ?? 'GoodwillStore')),
+                        'signature' => $signature,
+                    ];
+                    
+                    $ch = curl_init($momoCfg['endpoint']);
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POST => true,
+                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+                        CURLOPT_TIMEOUT => 30,
+                    ]);
+                    $response = curl_exec($ch);
+                    curl_close($ch);
+                    
+                    $decoded = $response ? json_decode($response, true) : null;
+                    $payUrl = trim((string)($decoded['payUrl'] ?? ''));
+                    
+                    if (!$response || $payUrl === '' || (string)($decoded['resultCode'] ?? '') !== '0') {
+                        throw new Exception('Lỗi cổng MoMo: ' . ($decoded['message'] ?? 'Không thể kết nối'));
+                    }
+                    
+                    header('Location: ' . $payUrl);
+                    exit;
+                }
 
                 $receipt = [
                     'order_id'       => $orderId,
@@ -1047,12 +1176,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
         /* ── Print ── */
         @media print {
+            @page {
+                size: 80mm 297mm; /* Standard POS printer width */
+                margin: 0;
+            }
+            body { 
+                background: none !important;
+                color: #000 !important;
+                font-family: "Courier New", Courier, monospace, sans-serif !important;
+            }
             body > *:not(.receipt-overlay) { display: none !important; }
-            .receipt-overlay { position: static; background: none; padding: 0; backdrop-filter: none; }
-            .receipt-card { max-height: none; box-shadow: none; border-radius: 0; animation: none; }
-            .receipt-head { background: none !important; color: #000 !important; border-radius: 0; border-bottom: 2px solid #ccc; }
-            .receipt-ok-icon { display: none; }
+            .receipt-overlay { 
+                position: absolute !important; inset: 0 !important;
+                background: none !important; padding: 2mm 5mm !important; 
+                backdrop-filter: none !important;
+                justify-content: flex-start !important;
+                align-items: flex-start !important;
+            }
+            .receipt-card { 
+                max-width: 72mm; width: 100% !important; margin: 0 auto;
+                max-height: none !important; box-shadow: none !important; 
+                border-radius: 0 !important; animation: none !important; 
+                background: transparent !important;
+                border: none !important;
+            }
+            .receipt-head { 
+                background: none !important; color: #000 !important; 
+                border-radius: 0 !important; border-bottom: 1.5px dashed #000 !important; 
+                padding: 0 0 10px 0 !important; margin-bottom: 10px !important;
+            }
+            .receipt-head h4 { font-size: 1.1rem !important; font-weight: bold !important; margin-bottom: 4px !important; color: #000 !important; }
+            .receipt-head p  { font-size: 0.75rem !important; opacity: 1 !important; color: #000 !important; }
+            .receipt-ok-icon { display: none !important; }
+            
+            .receipt-body { padding: 0 !important; }
+            
+            .r-meta-row { font-size: 0.75rem !important; color: #000 !important; padding: 2px 0 !important; flex-wrap: wrap; justify-content: space-between; }
+            .r-meta-row span:first-child { width: 40%; text-align: left; }
+            .r-meta-row strong { width: 60%; text-align: right; color: #000 !important; font-weight: normal !important; }
+            
+            .r-dash { border-top: 1.5px dashed #000 !important; margin: 8px 0 !important; }
+            
+            .r-item { font-size: 0.75rem !important; padding: 3px 0 !important; flex-wrap: wrap !important; }
+            .r-item-name { width: 100% !important; margin-bottom: 2px !important; font-weight: bold !important; color: #000 !important; }
+            .r-item-qty  { width: 30% !important; text-align: left !important; color: #000 !important; }
+            .r-item-amt  { width: 70% !important; text-align: right !important; font-weight: bold !important; color: #000 !important; }
+            
+            .r-total { display: flex; justify-content: space-between; font-size: 1.1rem !important; font-weight: bold !important; padding-top: 5px !important; color: #000 !important;}
+            
+            /* Hidden icons to format clean text */
+            .r-meta-row strong {
+               font-family: inherit !important; 
+            }
+            .r-meta-row { font-size: 0.85rem !important; }
+            .r-item { font-size: 0.85rem !important; padding-bottom: 8px !important; }
             .receipt-actions { display: none !important; }
+            .r-total { margin-bottom: 20px !important; font-size: 1.15rem !important; }
+            .receipt-body { padding-bottom: 15px !important; }
         }
     </style>
 </head>
@@ -1222,7 +1402,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                                         <i class="bi bi-bank"></i>
                                         <span>CK</span>
                                     </button>
-                                    <button class="pay-opt" type="button" data-method="bank_transfer">
+                                    <button class="pay-opt" type="button" data-method="momo">
+                                        <i class="bi bi-wallet2"></i>
+                                        <span>MoMo</span>
+                                    </button>
+                                    <button class="pay-opt" type="button" data-method="bank_transfer" style="display:none;">
                                         <i class="bi bi-credit-card"></i>
                                         <span>Thẻ</span>
                                     </button>
@@ -1294,7 +1478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
             </div>
             <div class="r-meta-row">
                 <span>Phương thức</span>
-                <strong><?php echo $receipt['payment_method'] === 'cash' ? '💵 Tiền mặt' : '🏦 Chuyển khoản / Thẻ'; ?></strong>
+                <strong><?php echo $receipt['payment_method'] === 'cash' ? '💵 Tiền mặt' : ($receipt['payment_method'] === 'momo' ? '📱 MoMo' : '🏦 Chuyển khoản / Thẻ'); ?></strong>
             </div>
 
             <hr class="r-dash">
