@@ -333,68 +333,45 @@ include 'includes/header.php';
     align-items: center;
 }
 
-.btn-view-detail {
-    flex: 1;
-    background: linear-gradient(135deg, var(--volunteer-primary), #2595b0);
-    color: #fff;
-    border: 1px solid rgba(17, 96, 120, 0.25);
-    border-radius: 12px;
-    padding: 0.75rem 1.2rem;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    box-shadow: 0 12px 22px rgba(27, 127, 157, 0.2), inset 0 1px 0 rgba(255,255,255,0.16);
-}
-
+.btn-view-detail,
 .btn-join-volunteer {
-    flex: 1;
+    width: 100%;
     background: #fff;
     color: var(--volunteer-primary-deep);
     border: 1.5px solid var(--volunteer-primary-border-strong);
     border-radius: 12px;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 1.2rem;
     font-weight: 700;
     transition: all 0.25s ease;
     cursor: pointer;
-    display: inline-flex;
+    text-decoration: none;
+    display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    box-shadow: 0 8px 16px rgba(23, 126, 154, 0.08);
+    gap: 0.5rem;
+    box-shadow: none;
 }
 
+.btn-view-detail:hover,
 .btn-join-volunteer:hover {
-    transform: translateY(-1px);
+    background: #f0f9fb;
     border-color: var(--volunteer-primary);
     color: var(--volunteer-primary-deep);
-    background: #f5fbfd;
+    text-decoration: none;
+    transform: translateY(-1px);
 }
 
-.btn-join-volunteer.is-joined,
-.btn-join-volunteer:disabled {
+.btn-join-volunteer.is-joined {
     cursor: default;
     background: #eaf6fb;
     color: #0f667f;
     border-color: #9bcede;
-    box-shadow: none;
 }
 
 .action-row {
     display: flex;
-    gap: 0.65rem;
-}
-
-.btn-view-detail:hover {
-    background: linear-gradient(135deg, #0f667f, var(--volunteer-primary));
-    transform: translateY(-1px) scale(1.01);
-    color: #fff;
-    text-decoration: none;
-    box-shadow: 0 14px 24px rgba(27, 127, 157, 0.18), 0 0 6px rgba(95, 184, 205, 0.06);
+    flex-direction: column;
+    gap: 0.55rem;
 }
 
 .empty-state {
@@ -644,20 +621,18 @@ include 'includes/header.php';
                                 <div class="action-row">
                                     <a href="campaign-detail.php?id=<?php echo $campaign['campaign_id']; ?>" 
                                        class="btn-view-detail">
-                                        <i class="bi bi-arrow-right"></i>Xem chi tiết
+                                        <i class="bi bi-eye"></i>Xem chi tiết
                                     </a>
-                                    <button type="button"
-                                            class="btn-join-volunteer <?php echo !empty($campaign['registered_by_me']) ? 'is-joined' : ''; ?>"
-                                            data-campaign-id="<?php echo (int)$campaign['campaign_id']; ?>"
-                                            data-campaign-name="<?php echo htmlspecialchars($campaign['name']); ?>"
-                                            <?php echo !empty($campaign['registered_by_me']) ? 'disabled' : ''; ?>
-                                            onclick="joinVolunteerCampaign(this)">
-                                        <?php if (!empty($campaign['registered_by_me'])): ?>
-                                            <i class="bi bi-check2-circle"></i>Đã tham gia
-                                        <?php else: ?>
-                                            <i class="bi bi-person-plus"></i>Tham gia
-                                        <?php endif; ?>
-                                    </button>
+                                    <?php if (!empty($campaign['registered_by_me'])): ?>
+                                    <span class="btn-join-volunteer is-joined">
+                                        <i class="bi bi-check2-circle"></i>Đã đăng ký
+                                    </span>
+                                    <?php else: ?>
+                                    <a href="campaign-volunteer-register.php?campaign_id=<?php echo (int)$campaign['campaign_id']; ?>"
+                                       class="btn-join-volunteer">
+                                        <i class="bi bi-person-plus"></i>Đăng ký tình nguyện viên
+                                    </a>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>

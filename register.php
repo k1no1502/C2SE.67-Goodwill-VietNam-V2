@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -11,6 +12,7 @@ if (isLoggedIn()) {
 
 $error = '';
 $success = '';
+$isModerationError = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
@@ -33,7 +35,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!$agree_terms) {
         $error = 'Vui lòng đồng ý với điều khoản sử dụng.';
     } else {
-        try {
+        // === KIỂM DUYỆT TỪ NGỮ ===
+        $fieldsToModerate = [
+            'Họ và tên' => $name,
+            'Địa chỉ' => $address
+        ];
+
+        foreach ($fieldsToModerate as $fieldName => $textValue) {
+            if (trim($textValue) === '') continue;
+
+            // 1. Local check
+            $localBanned = checkToxicTextLocal($textValue);
+            if ($localBanned) {
+                $error = "Mục [$fieldName] chứa từ bị cấm: $localBanned";
+                $isModerationError = true;
+                break;
+            }
+
+            // 2. AI check
+            $aiCheck = checkToxicTextGemini($textValue);
+            if ($aiCheck['violate']) {
+                $error = "Mục [$fieldName]: " . $aiCheck['reason'];
+                $isModerationError = true;
+                break;
+            }
+        }
+        
+        if (!$error) {
+            try {
             // Check if email already exists
             $sql = "SELECT user_id FROM users WHERE email = ?";
             $stmt = $pdo->prepare($sql);
@@ -80,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             error_log("Registration error: " . $e->getMessage());
             $error = 'Có lỗi xảy ra. Vui lòng thử lại sau.';
+        }
         }
     }
 }
@@ -540,9 +570,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p class="subtitle">Điền thông tin để bắt đầu hành trình cùng Goodwill Vietnam</p>
 
                 <?php if ($error): ?>
-                    <div class="alert alert-danger" role="alert">
-                        <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
-                    </div>
+                    <?php if (!empty($isModerationError)): ?>
+                        <?= renderModerationError('Đăng ký bị từ chối', $error) ?>
+                    <?php else: ?>
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
 
                 <?php if ($success): ?>

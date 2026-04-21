@@ -6,7 +6,7 @@ require_once 'includes/functions.php';
 requireStaffOrAdmin();
 
 if (isStaff() && !isAdmin() && getStaffPanelKey() === 'support') {
-    header('Location: index.php');
+    header('Location: admin/advisor-panel.php');
     exit();
 }
 
@@ -46,7 +46,7 @@ $redirectMap = [
     'orders' => 'admin/orders-panel.php',
     'campaigns' => 'admin/campaigns-panel.php',
     'cashier' => 'admin/cashier-panel.php',
-    'support' => 'index.php',
+    'support' => 'admin/advisor-panel.php',
     'admin' => 'admin/dashboard.php',
     'general' => 'index.php'
 ];
