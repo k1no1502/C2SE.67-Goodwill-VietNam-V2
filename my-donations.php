@@ -65,77 +65,163 @@ $moneySql = "SELECT t.trans_id, t.amount, t.status, t.payment_method, t.payment_
              LIMIT $moneyLimit OFFSET $moneyOffset";
 $moneyDonations = Database::fetchAll($moneySql, $moneyParams);
 
+// Campaign Donations History
+$campItemsSql = "SELECT cd.campaign_id, cd.created_at, c.name as campaign_name, 
+                 d.item_name, d.quantity, d.unit, d.status 
+                 FROM campaign_donations cd
+                 JOIN campaigns c ON cd.campaign_id = c.campaign_id
+                 JOIN donations d ON cd.donation_id = d.donation_id
+                 WHERE d.user_id = ?";
+$campItemDonations = Database::fetchAll($campItemsSql, [$_SESSION['user_id']]);
+
+$campMoneySql = "SELECT t.trans_id, t.amount, t.status, t.created_at, t.notes
+                 FROM transactions t 
+                 WHERE t.user_id = ? AND t.type = 'donation' AND t.notes LIKE '%[CAMPAIGN_MONEY_DONATION]%'";
+$campMoneyTx = Database::fetchAll($campMoneySql, [$_SESSION['user_id']]);
+
+$campaignDonationsHistory = [];
+foreach ($campItemDonations as $citem) {
+    $campaignDonationsHistory[] = [
+        'is_money' => false,
+        'campaign_id' => $citem['campaign_id'],
+        'campaign_name' => $citem['campaign_name'],
+        'item_name' => $citem['item_name'],
+        'quantity' => $citem['quantity'],
+        'unit' => $citem['unit'],
+        'status' => $citem['status'],
+        'created_at' => $citem['created_at'],
+    ];
+}
+foreach ($campMoneyTx as $tx) {
+    if (preg_match('/campaign_id=(\d+)/i', $tx['notes'], $m_id)) {
+        $cid = (int)$m_id[1];
+        $cname = '';
+        if (preg_match('/campaign_name=([^\n]+)/i', $tx['notes'], $m_name)) {
+            $cname = trim($m_name[1]);
+        }
+        $campaignDonationsHistory[] = [
+            'is_money' => true,
+            'campaign_id' => $cid,
+            'campaign_name' => $cname ?: 'Chiến dịch #' . $cid,
+            'amount' => $tx['amount'],
+            'trans_id' => $tx['trans_id'],
+            'status' => $tx['status'],
+            'created_at' => $tx['created_at'],
+        ];
+    }
+}
+usort($campaignDonationsHistory, function($a, $b) {
+    return strtotime($b['created_at']) <=> strtotime($a['created_at']);
+});
+$totalCampaignCount = count($campaignDonationsHistory);
+
 $pageTitle = "Quyên góp của tôi";
 include 'includes/header.php';
 ?>
 
-<div class="container mt-5 pt-5">
-    <div class="row">
-        <div class="col-lg-12">
-            <h2 class="mb-4">
-                <i class="bi bi-heart-fill text-success me-2"></i>Quyên góp của tôi
-            </h2>
+<style>
+.campaigns-page { background: #f2f7f9; min-height: 100vh; }
+.campaigns-hero { background: linear-gradient(135deg, #0e7490 0%, #155e75 100%); color: #fff; padding: 50px 0 45px; position: relative; overflow: hidden; margin-top: -1px; }
+.campaigns-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%); }
+.campaigns-hero-row { position: relative; z-index: 1; display: flex; align-items: center; gap: 1.6rem; }
+.hero-main { display: flex; align-items: center; gap: 1.6rem; }
+.hero-icon-box { width: 100px; height: 100px; border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; backdrop-filter: blur(6px); }
+.hero-icon-box i { font-size: 3rem; color: rgba(255, 255, 255, 0.95); }
+.hero-title { font-size: clamp(2rem, 4.5vw, 3.2rem); line-height: 1.1; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+.hero-sub { opacity: 0.9; margin-top: 0.5rem; margin-bottom: 0; font-size: clamp(1rem, 1.5vw, 1.2rem); max-width: 800px; }
+@media (max-width: 991.98px) { .campaigns-hero { padding: 35px 0 30px; margin-top: -1px; } .hero-main { gap: 1rem; } .hero-icon-box { width: 70px; height: 70px; border-radius: 20px; } .hero-icon-box i { font-size: 2rem; } .hero-title { font-size: clamp(1.6rem, 8vw, 2.2rem); } .hero-sub { font-size: 0.95rem; } }
+.mini-stat { border: 1px solid #d0e8ef; background: #ffffff; border-radius: 14px; padding: 1rem; text-align: center; box-shadow: 0 4px 14px rgba(14, 116, 144, 0.07); }
+.mini-stat .num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.mini-stat .txt { color: #64748b; font-size: 0.85rem; margin-top: 0.35rem; font-weight: 500; }
+.card { border: none; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05) !important; overflow: hidden; }
+.card-header { border-bottom: 1px solid #eef2f5; padding: 1.25rem 1.5rem; background: #fff !important; }
+.table-hover tbody tr:hover { background-color: #f8fafb; }
+.badge { padding: 0.4em 0.8em; font-weight: 600; border-radius: 6px; }
+</style>
 
-            <!-- Statistics -->
-            <div class="row mb-4">
-                <div class="col-md-3 mb-3">
-                    <div class="card border-primary">
-                        <div class="card-body text-center">
-                            <h3 class="text-primary"><?php echo $stats['total']; ?></h3>
-                            <p class="text-muted mb-0">Tổng quyên góp</p>
-                        </div>
-                    </div>
+<div class="campaigns-hero">
+    <div class="container">
+        <div class="campaigns-hero-row">
+            <div class="hero-main">
+                <div class="hero-icon-box">
+                    <i class="bi bi-box2-heart"></i>
                 </div>
-                <div class="col-md-3 mb-3">
-                    <div class="card border-warning">
-                        <div class="card-body text-center">
-                            <h3 class="text-warning"><?php echo $stats['pending']; ?></h3>
-                            <p class="text-muted mb-0">Chờ duyệt</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <div class="card border-success">
-                        <div class="card-body text-center">
-                            <h3 class="text-success"><?php echo $stats['approved']; ?></h3>
-                            <p class="text-muted mb-0">Đã duyệt</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <div class="card border-danger">
-                        <div class="card-body text-center">
-                            <h3 class="text-danger"><?php echo $stats['rejected']; ?></h3>
-                            <p class="text-muted mb-0">Từ chối</p>
-                        </div>
-                    </div>
+                <div>
+                    <h1 class="hero-title">Lịch sử quyên góp</h1>
+                    <p class="hero-sub">Theo dõi các vật phẩm và tài chính bạn đã đồng hành cùng tổ chức</p>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
 
-            <!-- Filter -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="my-donations.php" class="btn btn-<?php echo $status === '' ? 'primary' : 'outline-primary'; ?>">
-                            Tất cả (<?php echo $stats['total']; ?>)
-                        </a>
-                        <a href="my-donations.php?status=pending" class="btn btn-<?php echo $status === 'pending' ? 'warning' : 'outline-warning'; ?>">
-                            Chờ duyệt (<?php echo $stats['pending']; ?>)
-                        </a>
-                        <a href="my-donations.php?status=approved" class="btn btn-<?php echo $status === 'approved' ? 'success' : 'outline-success'; ?>">
-                            Đã duyệt (<?php echo $stats['approved']; ?>)
-                        </a>
-                        <a href="my-donations.php?status=rejected" class="btn btn-<?php echo $status === 'rejected' ? 'danger' : 'outline-danger'; ?>">
-                            Từ chối (<?php echo $stats['rejected']; ?>)
-                        </a>
-                        <a href="donate.php" class="btn btn-success ms-auto">
-                            <i class="bi bi-plus-circle me-1"></i>Quyên góp mới
-                        </a>
-                    </div>
-                </div>
+<div class="campaigns-page pb-5">
+<div class="container py-4">
+
+    <!-- Statistics -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="mini-stat" style="border-left: 4px solid #0d6efd;">
+                <div class="num text-primary"><?php echo $stats['total']; ?></div>
+                <div class="txt">Tổng vật phẩm</div>
             </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="mini-stat" style="border-left: 4px solid #198754;">
+                <div class="num text-success"><?php echo $stats['approved']; ?></div>
+                <div class="txt">Vật phẩm đã duyệt</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="mini-stat" style="border-left: 4px solid #ffc107;">
+                <div class="num text-warning"><?php echo $stats['pending']; ?></div>
+                <div class="txt">Vật phẩm chờ duyệt</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="mini-stat" style="border-left: 4px solid #0e7490;">
+                <div class="num text-info" style="color: #0e7490 !important;"><?php echo (int)$totalMoneyDonations; ?></div>
+                <div class="txt">Số lần QT tiền mặt</div>
+            </div>
+        </div>
+    </div>
 
-            <!-- Donations List -->
+    <!-- Filter Section -->
+    <div class="d-flex align-items-center justify-content-between mb-3 mt-4 flex-wrap gap-2">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-box-seam text-primary me-2"></i>Quyên góp Nhóm Vật phẩm</h5>
+        <div class="d-flex gap-2">
+            <a href="#campaign-history" class="btn btn-sm" style="border: 1px solid #198754; color: #198754; font-weight: 500;">
+                <i class="bi bi-flag me-1"></i>Chiến Dịch
+            </a>
+            <a href="#money-history" class="btn btn-sm" style="border: 1px solid #0e7490; color: #0e7490; font-weight: 500;">
+                <i class="bi bi-arrow-down-circle me-1"></i>Quyên góp tiền
+            </a>
+            <a href="donate.php" class="btn btn-sm text-white" style="background:#0e7490; font-weight: 500;">
+                <i class="bi bi-plus-circle me-1"></i>Thêm
+            </a>
+        </div>
+    </div>
+    
+    <div class="card mb-4 shadow-sm" style="box-shadow: 0 2px 8px rgba(0,0,0,0.03)!important;">
+        <div class="card-body bg-light rounded" style="padding: 12px 16px;">
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="my-donations.php" class="btn btn-sm btn-<?php echo $status === '' ? 'primary' : 'outline-secondary bg-white text-dark'; ?>">
+                    Tất cả (<?php echo $stats['total']; ?>)
+                </a>
+                <a href="my-donations.php?status=pending" class="btn btn-sm btn-<?php echo $status === 'pending' ? 'warning' : 'outline-secondary bg-white text-dark'; ?>">
+                    Chờ duyệt (<?php echo $stats['pending']; ?>)
+                </a>
+                <a href="my-donations.php?status=approved" class="btn btn-sm btn-<?php echo $status === 'approved' ? 'success' : 'outline-secondary bg-white text-dark'; ?>">
+                    Đã duyệt (<?php echo $stats['approved']; ?>)
+                </a>
+                <a href="my-donations.php?status=rejected" class="btn btn-sm btn-<?php echo $status === 'rejected' ? 'danger' : 'outline-secondary bg-white text-dark'; ?>">
+                    Từ chối (<?php echo $stats['rejected']; ?>)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Donations List -->
             <?php if (empty($donations)): ?>
                 <div class="card shadow-sm">
                     <div class="card-body text-center py-5">
@@ -314,17 +400,20 @@ include 'includes/header.php';
 
             <!-- Money Donation History -->
             <div class="card shadow-sm mt-4" id="money-history">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-cash-coin text-success me-2"></i>Lịch sử quyên góp tiền
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-cash-coin me-2" style="color: #0e7490;"></i>Quyên góp Tiền mặt
+                        <span class="badge bg-success ms-2"><?php echo (int)$totalMoneyDonations; ?> giao dịch</span>
                     </h5>
-                    <span class="badge bg-success"><?php echo (int)$totalMoneyDonations; ?> giao dịch</span>
                 </div>
                 <div class="card-body">
                     <?php if (empty($moneyDonations)): ?>
                         <div class="text-center py-4">
                             <i class="bi bi-wallet2 text-muted" style="font-size: 2rem;"></i>
-                            <p class="text-muted mt-2 mb-0">Bạn chưa có giao dịch quyên góp tiền nào.</p>
+                            <p class="text-muted mt-2 mb-3">Bạn chưa có giao dịch quyên góp tiền nào.</p>
+                            <a href="donate.php" class="btn text-white px-4 py-2" style="background:#0e7490; border-radius: 8px; font-weight: 500;">
+                                <i class="bi bi-cash-coin me-2"></i>Quyên góp tiền
+                            </a>
                         </div>
                     <?php else: ?>
                         <div class="table-responsive">
@@ -391,7 +480,89 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
             </div>
-        </div>
+
+            <!-- Campaign Donation History -->
+            <div class="card shadow-sm mt-4" id="campaign-history">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="bi bi-flag-fill me-2" style="color: #198754;"></i>Lịch sử Quyên góp Chiến dịch
+                        <span class="badge bg-success ms-2"><?php echo $totalCampaignCount; ?> lượt</span>
+                    </h5>
+                    <a href="campaigns.php" class="btn btn-sm text-white" style="background:#198754;">
+                        <i class="bi bi-heart-fill me-1"></i>Tham gia Chiến dịch
+                    </a>
+                </div>
+                <div class="card-body">
+                    <?php if (empty($campaignDonationsHistory)): ?>
+                        <div class="text-center py-4">
+                            <i class="bi bi-flag text-muted" style="font-size: 2rem;"></i>
+                            <p class="text-muted mt-2 mb-3">Bạn chưa đóng góp cho chiến dịch nào.</p>
+                            <a href="campaigns.php" class="btn btn-outline-success px-4 py-2" style="border-radius: 8px; font-weight: 500;">
+                                <i class="bi bi-search me-2"></i>Khám phá Chiến dịch
+                            </a>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Chiến dịch</th>
+                                        <th>Hình thức</th>
+                                        <th>Mức đóng góp</th>
+                                        <th>Trạng thái</th>
+                                        <th>Ngày tham gia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($campaignDonationsHistory as $ch): ?>
+                                        <tr>
+                                            <td>
+                                                <a href="campaign-detail.php?id=<?php echo $ch['campaign_id']; ?>" class="text-decoration-none fw-bold text-dark">
+                                                    <?php echo htmlspecialchars($ch['campaign_name']); ?>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <?php if ($ch['is_money']): ?>
+                                                    <span class="badge bg-info text-dark"><i class="bi bi-cash me-1"></i>Tiền mặt</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-primary"><i class="bi bi-box me-1"></i>Vật phẩm</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($ch['is_money']): ?>
+                                                    <strong class="text-success"><?php echo formatCurrency((float)$ch['amount']); ?></strong>
+                                                <?php else: ?>
+                                                    <strong><?php echo htmlspecialchars($ch['item_name']); ?></strong> (SL: <?php echo $ch['quantity'] . ' ' . $ch['unit']; ?>)
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php
+                                                if ($ch['is_money']) {
+                                                    $st = $moneyStatusMap[$ch['status']] ?? ['class' => 'secondary', 'text' => 'Không xác định'];
+                                                } else {
+                                                    $statusMap = [
+                                                        'pending' => ['class' => 'warning', 'text' => 'Chờ duyệt', 'icon' => 'clock'],
+                                                        'approved' => ['class' => 'success', 'text' => 'Đã duyệt', 'icon' => 'check-circle'],
+                                                        'rejected' => ['class' => 'danger', 'text' => 'Từ chối', 'icon' => 'x-circle'],
+                                                        'cancelled' => ['class' => 'secondary', 'text' => 'Đã hủy', 'icon' => 'dash-circle']
+                                                    ];
+                                                    $st = $statusMap[$ch['status']] ?? ['class' => 'secondary', 'text' => 'N/A'];
+                                                }
+                                                ?>
+                                                <span class="badge bg-<?php echo $st['class']; ?>">
+                                                    <?php echo $st['text']; ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo formatDate($ch['created_at'], 'd/m/Y H:i'); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
     </div>
 </div>
 

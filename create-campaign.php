@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 requireLogin();
 
@@ -53,6 +54,16 @@ function extractYoutubeVideoId($input) {
     return '';
 }
 
+// ============================================================
+// HÀM KIỂM DUYỆT NỘI DUNG (Content Moderation)
+// ============================================================
+
+
+
+// ============================================================
+// XỬ LÝ FORM
+// ============================================================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
@@ -69,7 +80,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Ngày bắt đầu phải từ hôm nay trở đi.';
     } elseif (strtotime($end_date) <= strtotime($start_date)) {
         $error = 'Ngày kết thúc phải sau ngày bắt đầu.';
-    } else {
+    }
+
+    // === KIỂM DUYỆT NỘI DUNG ===
+    if (!$error) {
+        $allText = $name . ' ' . $description;
+        $toxicWord = checkToxicTextLocal($allText);
+        if ($toxicWord !== null) {
+            $error = 'Khởi tạo chiến dịch thất bại! Tên hoặc mô tả chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+        } else {
+            $geminiCheck = checkToxicTextGemini($allText);
+            if ($geminiCheck['violate']) {
+                $error = 'Khởi tạo chiến dịch thất bại! ' . htmlspecialchars($geminiCheck['reason']);
+            }
+        }
+    }
+
+    if (!$error) {
         try {
             Database::beginTransaction();
             
@@ -84,6 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uploadResult = uploadFile($_FILES['image'], $uploadDir);
                 if ($uploadResult['success']) {
                     $imagePath = $uploadResult['filename'];
+                    
+                    // === KIỂM DUYỆT ẢNH NSFW ===
+                    $fullImagePath = $uploadDir . $imagePath;
+                    if (file_exists($fullImagePath)) {
+                        $imgCheck = checkNsfwImageGemini($fullImagePath);
+                        if ($imgCheck['violate']) {
+                            @unlink($fullImagePath);
+                            throw new Exception('Khởi tạo chiến dịch thất bại! ' . $imgCheck['reason']);
+                        }
+                    }
                 }
             }
             
@@ -224,7 +261,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             Database::rollback();
             error_log("Create campaign error: " . $e->getMessage());
-            $error = 'Có lỗi xảy ra khi tạo chiến dịch. Vui lòng thử lại.';
+            // Hiển thị lỗi kiểm duyệt trực tiếp, lỗi khác thì thông báo chung
+            if (strpos($e->getMessage(), 'Khởi tạo chiến dịch thất bại') !== false || 
+                strpos($e->getMessage(), 'Vui lòng') !== false ||
+                strpos($e->getMessage(), 'Đường link') !== false ||
+                strpos($e->getMessage(), 'Lỗi upload') !== false) {
+                $error = $e->getMessage();
+            } else {
+                $error = 'Có lỗi xảy ra khi tạo chiến dịch. Vui lòng thử lại.';
+            }
         }
     }
 }
@@ -427,10 +472,17 @@ include 'includes/header.php';
                     <?php endif; ?>
 
                     <?php if ($error): ?>
+                        <?php
+                        $isModReject = (strpos($error, 'Khởi tạo chiến dịch thất bại') !== false);
+                        ?>
+                        <?php if ($isModReject): ?>
+                            <?= renderModerationError('Khởi tạo chiến dịch thất bại', str_replace('Khởi tạo chiến dịch thất bại! ', '', $error)) ?>
+                        <?php else: ?>
                         <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
                             <i class="bi bi-exclamation-triangle-fill fs-5"></i>
                             <span><?php echo htmlspecialchars($error); ?></span>
                         </div>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>

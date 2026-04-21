@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
@@ -164,26 +164,31 @@ include 'includes/header.php';
 ?>
 
 <!-- Main Content -->
-<div class="container orders-shell py-4 py-lg-5">
-    <!-- Page Header -->
-    <div class="orders-hero mb-4 mb-lg-5">
-        <div class="row g-3 align-items-center">
+<div class="orders-page-hero">
+    <div class="container position-relative z-1">
+        <div class="row align-items-center">
             <div class="col-lg-8">
-                <span class="orders-tag"><i class="bi bi-stars me-2"></i>Goodwill Vietnam</span>
-                <h1 class="orders-title mt-3 mb-2">
-                    <i class="bi bi-box-seam me-2"></i>Đơn hàng của tôi
-                </h1>
-                <p class="orders-subtitle mb-0">Theo dõi tiến trình giao hàng, kiểm tra thông tin nhận và quản lý mọi đơn mua trong một nơi.</p>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="hero-icon-box">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <div>
+                        <h1 class="hero-title">Đơn hàng của tôi</h1>
+                        <p class="hero-subtitle">Theo dõi tiến trình giao hàng, kiểm tra thông tin nhận và quản lý mọi đơn mua trong một nơi.</p>
+                    </div>
+                </div>
             </div>
-            <div class="col-lg-4 text-lg-end">
-                <div class="orders-total-spent">
-                    <div class="small text-muted mb-1">Tổng chi tiêu</div>
-                    <div class="orders-total-value"><?php echo number_format((float)$stats['total_spent']); ?> VNĐ</div>
+            <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
+                <div class="hero-total-spent">
+                    <div class="small fw-medium mb-1 text-white-50">Tổng chi tiêu</div>
+                    <div class="hero-total-value"><?php echo number_format((float)$stats['total_spent']); ?> VNĐ</div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
+<div class="container py-4 py-lg-5">
     <!-- Statistics Cards -->
     <div class="row g-3 mb-4">
         <div class="col-xl-2 col-lg-4 col-sm-6">
@@ -477,49 +482,63 @@ $currentStatusLabel = $steps[$currentStatus]['label'] ?? $statusText;
 </div>
 
 <style>
-.orders-shell {
-    margin-top: 5rem;
+.orders-page-hero {
+    background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+    color: #fff;
+    padding: 64px 0 48px;
+    position: relative;
+    overflow: hidden;
+    margin-top: -1px;
 }
-.orders-hero {
-    padding: 1.3rem 1.4rem;
-    border: 1px solid #d8eef3;
-    border-radius: 20px;
-    background:
-        radial-gradient(circle at 85% 15%, rgba(14, 116, 144, 0.15), transparent 40%),
-        linear-gradient(145deg, #f7fcfd 0%, #edf8fb 100%);
-    box-shadow: 0 12px 34px rgba(9, 84, 103, 0.09);
+.orders-page-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
 }
-.orders-tag {
-    display: inline-flex;
+.hero-icon-box {
+    width: 100px;
+    height: 100px;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
     align-items: center;
-    padding: 0.3rem 0.75rem;
-    border-radius: 999px;
-    background: #dff2f7;
-    color: #0c6d86;
-    font-weight: 700;
-    font-size: 0.85rem;
+    justify-content: center;
+    flex-shrink: 0;
+    backdrop-filter: blur(6px);
 }
-.orders-title {
-    color: #0f172a;
-    font-weight: 800;
-    letter-spacing: 0.2px;
+.hero-icon-box i {
+    font-size: 3rem;
+    color: rgba(255, 255, 255, 0.95);
 }
-.orders-subtitle {
-    color: #5f6c80;
+.hero-title {
+    font-size: clamp(2.4rem, 5.2vw, 5rem);
+    line-height: 1.05;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.02em;
 }
-.orders-total-spent {
-    display: inline-block;
-    background: #fff;
-    border: 1px solid #d8eef3;
+.hero-subtitle {
+    opacity: 0.88;
+    margin-top: 0.7rem;
+    margin-bottom: 0;
+    font-size: clamp(1.05rem, 1.7vw, 1.5rem);
+    max-width: 940px;
+}
+.hero-total-spent {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
     border-radius: 14px;
-    padding: 0.8rem 1rem;
-    min-width: 220px;
-    box-shadow: 0 8px 20px rgba(9, 84, 103, 0.08);
+    padding: 1rem 1.5rem;
+    display: inline-block;
+    backdrop-filter: blur(6px);
 }
-.orders-total-value {
-    color: #0c6d86;
+.hero-total-value {
+    color: #fff;
     font-weight: 800;
-    font-size: 1.1rem;
+    font-size: 1.5rem;
+    line-height: 1;
 }
 .stat-card {
     height: 100%;
@@ -632,11 +651,14 @@ $currentStatusLabel = $steps[$currentStatus]['label'] ?? $statusText;
     font-weight: 600;
 }
 @media (max-width: 991.98px) {
-    .orders-shell {
-        margin-top: 4.8rem;
+    .hero-icon-box {
+        width: 80px;
+        height: 80px;
+        border-radius: 20px;
     }
-    .orders-hero {
-        padding: 1rem;
+    .hero-icon-box i { font-size: 2.2rem; }
+    .orders-page-hero {
+        padding: 38px 0 34px;
     }
     .order-card-head,
     .order-card-body {
@@ -644,11 +666,12 @@ $currentStatusLabel = $steps[$currentStatus]['label'] ?? $statusText;
     }
 }
 @media (max-width: 575.98px) {
-    .orders-title {
-        font-size: 1.5rem;
+    .hero-title {
+        font-size: clamp(1.8rem, 8vw, 2.8rem);
     }
-    .orders-total-spent {
+    .hero-total-spent {
         width: 100%;
+        text-align: center;
     }
 }
 </style>

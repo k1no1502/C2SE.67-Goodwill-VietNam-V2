@@ -62,18 +62,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     $rating_stars = (int)($_POST['rating_stars'] ?? 0);
     $review_text = sanitize($_POST['review_text'] ?? '');
-    
+
     // Validation
     if ($rating_stars < 1 || $rating_stars > 5) {
         setFlashMessage('error', 'Vui lòng chọn đánh giá từ 1 đến 5 sao.');
         header("Location: item-detail.php?id=$ratingItemId");
         exit();
     }
-    
+
     if ($ratingItemId <= 0) {
         setFlashMessage('error', 'Sản phẩm không tồn tại.');
         header("Location: shop.php");
         exit();
+    }
+
+    // Kiểm duyệt từ ngữ tục tĩu trong đánh giá chi tiết
+    require_once 'includes/moderation.php';
+    if (trim($review_text) !== '') {
+        $localMatch = checkToxicTextLocal($review_text);
+        if ($localMatch !== null) {
+            $alert = renderModerationError('Đánh giá sản phẩm bị từ chối', 'Nội dung đánh giá chứa từ ngữ không phù hợp (phát hiện: <b>' . htmlspecialchars($localMatch) . '</b>). Vui lòng chỉnh sửa và thử lại.');
+            setFlashMessage('error', $alert);
+            header("Location: item-detail.php?id=$ratingItemId");
+            exit();
+        } else {
+            $geminiCheck = checkToxicTextGemini($review_text);
+            if ($geminiCheck['violate']) {
+                $alert = renderModerationError('Đánh giá sản phẩm bị từ chối', 'Nội dung đánh giá bị từ chối: ' . htmlspecialchars($geminiCheck['reason']));
+                setFlashMessage('error', $alert);
+                header("Location: item-detail.php?id=$ratingItemId");
+                exit();
+            }
+        }
     }
     
     try {
@@ -179,6 +199,8 @@ $imageUrls = array_map(static fn($image) => resolveDonationImageUrl((string)$ima
 $availableQty = max(0, (int)($item['available_quantity'] ?? 0));
 $pageTitle = $item['name'];
 include 'includes/header.php';
+// Hiển thị thông báo lỗi/flash message nếu có
+echo displayFlashMessages();
 ?>
 
 <style>
@@ -479,6 +501,8 @@ include 'includes/header.php';
                 <i class="bi bi-star-fill me-2"></i>Đánh giá sản phẩm
                 <span class="badge ms-2" style="background:#e2f3f8;color:#0e7490;"><?php echo count($ratings); ?> đánh giá</span>
             </div>
+            <!-- Hiển thị flash message ngay trên phần đánh giá của bạn -->
+            <?php if (isset($_SESSION['flash']) && !empty($_SESSION['flash'])) echo displayFlashMessages(); ?>
             <div class="p-3 p-md-4">
                 <?php
                 $ratingDistribution = [];

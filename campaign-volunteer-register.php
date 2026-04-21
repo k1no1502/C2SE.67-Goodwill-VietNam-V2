@@ -59,7 +59,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$existing) {
             '- SDT: ' . $phone,
         ]);
 
-        $finalMessage = $message !== '' ? ($profileBlock . "\n\n" . $message) : $profileBlock;
+        // --- TEXT MODERATION ---
+        require_once 'includes/moderation.php';
+        
+        $fieldsToModerate = [
+            'Tên' => $fullName,
+            'Kỹ năng' => $skills,
+            'Thời gian' => $availability,
+            'Vai trò mong muốn' => $role,
+            'Lời nhắn' => $message
+        ];
+
+        $toxicFound = false;
+        foreach ($fieldsToModerate as $fieldName => $textValue) {
+            if (trim($textValue) === '') continue;
+
+            // 1. Local check
+            $localBanned = checkToxicTextLocal($textValue);
+            if ($localBanned) {
+                $error = renderModerationError('Đăng ký bị từ chối', "Mục [$fieldName] chứa từ bị cấm: $localBanned");
+                $toxicFound = true;
+                break;
+            }
+
+            // 2. AI check
+            $aiCheck = checkToxicTextGemini($textValue);
+            if ($aiCheck['violate']) {
+                $error = renderModerationError('Đăng ký bị từ chối', "Mục [$fieldName]: " . $aiCheck['reason']);
+                $toxicFound = true;
+                break;
+            }
+        }
+
+        if (!$toxicFound) {
+            $finalMessage = $message !== '' ? ($profileBlock . "\n\n" . $message) : $profileBlock;
 
         try {
             $columns = Database::fetchAll("SHOW COLUMNS FROM campaign_volunteers LIKE 'role'");
@@ -84,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$existing) {
         } catch (Exception $e) {
             $error = 'Không thể đăng ký: ' . $e->getMessage();
             error_log('Campaign volunteer register error: ' . $e->getMessage());
+            }
         }
     }
 }
@@ -318,7 +352,11 @@ include 'includes/header.php';
                             </div>
                         <?php else: ?>
                             <?php if ($error): ?>
-                                <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                                <?php if (strpos($error, 'alert-heading') !== false): ?>
+                                    <?php echo $error; ?>
+                                <?php else: ?>
+                                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                             <form method="POST" class="cv-form">

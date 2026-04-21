@@ -57,9 +57,49 @@ include 'includes/header.php';
 ?>
 
 <style>
-    .password-shell {
-        margin-top: 5.2rem;
-        margin-bottom: 2rem;
+    .password-page-hero {
+        background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+        color: #fff;
+        padding: 64px 0 48px;
+        position: relative;
+        overflow: hidden;
+        margin-top: -1px;
+    }
+    .password-page-hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
+    }
+    .hero-icon-box {
+        width: 100px;
+        height: 100px;
+        border-radius: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        backdrop-filter: blur(6px);
+    }
+    .hero-icon-box i {
+        font-size: 3rem;
+        color: rgba(255, 255, 255, 0.95);
+    }
+    .hero-title {
+        font-size: clamp(2.4rem, 5.2vw, 5rem);
+        line-height: 1.05;
+        font-weight: 900;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+    .hero-subtitle {
+        opacity: 0.88;
+        margin-top: 0.7rem;
+        margin-bottom: 0;
+        font-size: clamp(1.05rem, 1.7vw, 1.5rem);
+        max-width: 940px;
     }
     .password-wrap {
         border: 1px solid #d9edf2;
@@ -68,23 +108,8 @@ include 'includes/header.php';
         background: #fff;
         box-shadow: 0 16px 40px rgba(8, 74, 92, 0.10);
     }
-    .password-head {
-        padding: 1.25rem 1.4rem;
-        color: #fff;
-        background:
-            radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.24), transparent 35%),
-            linear-gradient(140deg, #0e7490 0%, #06B6D4 100%);
-    }
-    .password-head h4 {
-        font-weight: 800;
-        margin-bottom: 0.3rem;
-    }
-    .password-head p {
-        margin-bottom: 0;
-        opacity: 0.9;
-    }
     .password-body {
-        padding: 1.35rem;
+        padding: 2.25rem;
         background: linear-gradient(180deg, #ffffff 0%, #f8fdff 100%);
     }
     .hint-box {
@@ -135,6 +160,7 @@ include 'includes/header.php';
         border-radius: 12px;
         border-color: #a7dbe7;
         color: #0e7490;
+        background: #fff;
         font-weight: 600;
     }
     .btn-password-back:hover {
@@ -143,21 +169,49 @@ include 'includes/header.php';
         border-color: #8ecddd;
     }
     @media (max-width: 991.98px) {
-        .password-shell {
-            margin-top: 4.9rem;
+        .password-page-hero {
+            padding: 38px 0 34px;
+        }
+        .hero-icon-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+        }
+        .hero-icon-box i { font-size: 2.2rem; }
+        .hero-title {
+            font-size: clamp(1.8rem, 8vw, 2.8rem);
+        }
+        .password-body {
+            padding: 1.5rem;
         }
     }
 </style>
 
-<div class="container password-shell">
+<div class="password-page-hero">
+    <div class="container position-relative z-1">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="hero-icon-box">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <div>
+                        <h1 class="hero-title">Đổi mật khẩu</h1>
+                        <p class="hero-subtitle">Cập nhật mật khẩu định kỳ để tăng độ an toàn cho tài khoản của bạn.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-4 py-lg-5">
     <div class="row justify-content-center">
         <div class="col-lg-7 col-xl-6">
             <div class="password-wrap">
-                <div class="password-head">
-                    <h4><i class="bi bi-shield-lock me-2"></i>Đổi mật khẩu</h4>
-                    <p>Cập nhật mật khẩu định kỳ để tăng độ an toàn cho tài khoản của bạn.</p>
-                </div>
                 <div class="password-body">
+
+
                     <?php if ($success): ?>
                         <div class="alert alert-success" role="alert">
                             <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($success); ?>

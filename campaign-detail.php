@@ -40,7 +40,8 @@ $items = Database::fetchAll(
                 WHEN COALESCE(ci.quantity_received, 0) >= ci.quantity_needed THEN 'Đủ'
                 WHEN COALESCE(ci.quantity_received, 0) > 0 THEN 'Đang thiếu'
                 ELSE 'Chưa có'
-            END as status_text
+            END as status_text,
+            COALESCE(ci.quantity_transferred, 0) as quantity_transferred
      FROM campaign_items ci
      LEFT JOIN categories c ON ci.category_id = c.category_id
      WHERE ci.campaign_id = ?
@@ -80,12 +81,17 @@ $volunteers = Database::fetchAll(
 
 // Check if user is volunteer
 $isVolunteer = false;
+$isCreator = false;
 if (isLoggedIn()) {
     $volunteerCheck = Database::fetch(
         "SELECT * FROM campaign_volunteers WHERE campaign_id = ? AND user_id = ?",
         [$campaign_id, $_SESSION['user_id']]
     );
     $isVolunteer = $volunteerCheck !== false;
+    
+    if ($_SESSION['user_id'] == $campaign['created_by']) {
+        $isCreator = true;
+    }
 }
 
 // Calculate campaign progress
@@ -1119,6 +1125,23 @@ include 'includes/header.php';
             </div>
 
             <!-- Actions -->
+            <?php if ($isCreator && in_array($campaign['status'], ['active', 'completed'])): ?>
+            <!-- Control Panel cho Người Tạo -->
+            <div class="card shadow-sm mb-4 sidebar-card" style="border: 2px solid #0e7490;">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 text-info-emphasis">
+                        <i class="bi bi-gear-fill me-2"></i>Bảng điều khiển (Creator)
+                    </h5>
+                    <p class="small text-muted mb-3">
+                        Bạn có thể chuyển các vật phẩm còn dư (vượt số lượng cần thiết) sang Shop để chia sẻ cho cộng đồng.
+                    </p>
+                    <button class="btn w-100" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; font-weight: 600;" onclick="openTransferModal()">
+                        <i class="bi bi-box-arrow-right me-2"></i>Chuyển vật phẩm dư vào Shop
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div class="card shadow-sm mb-4 sidebar-card">
                 <div class="card-body p-4">
                     <h5 class="fw-bold mb-3">Tham gia chiến dịch</h5>
@@ -1280,6 +1303,92 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Transfer to Shop Modal -->
+<?php if ($isCreator): ?>
+<div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border-bottom: 1px solid #99f6e4;">
+                <h5 class="modal-title text-teal-800"><i class="bi bi-box-arrow-right me-2"></i>Chuyển vật phẩm vào Shop</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-4">Chọn số lượng vật phẩm còn dư để chuyển vào Shop. Các vật phẩm này sẽ được đưa lên Shop dưới dạng "Miễn phí".</p>
+                
+                <form id="transferForm">
+                    <input type="hidden" name="campaign_id" value="<?php echo $campaign_id; ?>">
+                    
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Vật phẩm</th>
+                                    <th class="text-center">Cần</th>
+                                    <th class="text-center">Đã nhận</th>
+                                    <th class="text-center text-success">Còn dư</th>
+                                    <th class="text-center" style="width: 150px;">SL chuyển</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php 
+                                $hasLeftover = false;
+                                foreach ($items as $item): 
+                                    $received = (int)($item['quantity_received'] ?? 0);
+                                    $needed = (int)($item['quantity_needed'] ?? 0);
+                                    $transferred = (int)($item['quantity_transferred'] ?? 0);
+                                    $leftover = max(0, $received - $needed - $transferred);
+                                    
+                                    if ($leftover > 0):
+                                        $hasLeftover = true;
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold"><?php echo htmlspecialchars($item['item_name']); ?></div>
+                                            <small class="text-muted"><?php echo htmlspecialchars($item['category_name'] ?? ''); ?></small>
+                                        </td>
+                                        <td class="text-center"><?php echo $needed; ?></td>
+                                        <td class="text-center"><?php echo $received; ?></td>
+                                        <td class="text-center fw-bold text-success">
+                                            <?php echo $leftover; ?> <?php echo htmlspecialchars($item['unit'] ?? ''); ?>
+                                        </td>
+                                        <td>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control text-center transfer-qty" 
+                                                       name="transfer_items[<?php echo $item['item_id']; ?>]" 
+                                                       value="0" min="0" max="<?php echo $leftover; ?>">
+                                                <span class="input-group-text"><?php echo htmlspecialchars($item['unit'] ?? ''); ?></span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php 
+                                    endif;
+                                endforeach; 
+                                
+                                if (!$hasLeftover):
+                                ?>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                            Hiện tại không có vật phẩm nào còn dư để chuyển.
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="background: #f8fafc;">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-success" id="btnSubmitTransfer" <?php echo !$hasLeftover ? 'disabled' : ''; ?>>
+                    <i class="bi bi-check2-circle me-1"></i>Xác nhận chuyển
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -1454,6 +1563,60 @@ function shareOnSocial() {
         window.open(shareUrl, '_blank', 'width=600,height=400');
     }
 }
+
+<?php if ($isCreator): ?>
+function openTransferModal() {
+    const modalEl = document.getElementById('transferModal');
+    if (!modalEl || typeof bootstrap === 'undefined') return;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+document.getElementById('btnSubmitTransfer')?.addEventListener('click', function() {
+    const form = document.getElementById('transferForm');
+    const formData = new FormData(form);
+    let hasItems = false;
+    
+    form.querySelectorAll('.transfer-qty').forEach(input => {
+        if (parseInt(input.value) > 0) hasItems = true;
+    });
+
+    if (!hasItems) {
+        alert('Vui lòng chọn số lượng ít nhất 1 vật phẩm để chuyển.');
+        return;
+    }
+
+    if (!confirm('Bạn chắc chắn muốn chuyển các vật phẩm này vào Shop dưới dạng Miễn phí chứ? Hành động này không thể hoàn tác.')) {
+        return;
+    }
+
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Đang xử lý...';
+
+    fetch('api/transfer-campaign-items.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Chuyển vật phẩm thành công! Các vật phẩm đã có mặt trên Shop.');
+            location.reload();
+        } else {
+            alert(data.message || 'Có lỗi xảy ra!');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Lỗi kết nối!');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+});
+<?php endif; ?>
 </script>
 
 <?php include 'includes/footer.php'; ?>

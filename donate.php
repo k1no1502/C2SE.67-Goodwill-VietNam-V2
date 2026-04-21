@@ -5,6 +5,7 @@ error_reporting(E_ALL);
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 requireLogin();
 
@@ -823,7 +824,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (trim($_POST['action'] ?? '') === '
         $paymentError = 'Vui lòng nhập số tiền hợp lệ (tối thiểu 1.000 VND).';
     } elseif (!in_array($method, $allowedMethods, true)) {
         $paymentError = 'Vui lòng chọn phương thức thanh toán.';
-    } else {
+    }
+
+    // === KIỂM DUYỆT LỜI NHẮN TRƯỚC KHI THANH TOÁN ===
+    if (!$paymentError && $message !== '') {
+        $toxicWord = checkToxicTextLocal($message);
+        if ($toxicWord !== null) {
+            $paymentError = 'Quyên góp tiền thất bại! Lời nhắn chứa từ ngữ tục tĩu, thô thiển hoặc không phù hợp.';
+        }
+    }
+    if (!$paymentError && $message !== '') {
+        if (checkToxicTextGemini($message)) {
+            $paymentError = 'Quyên góp tiền thất bại! Lời nhắn bị phát hiện vi phạm bởi hệ thống AI.';
+        }
+    }
+
+    if (!$paymentError) {
         try {
             $transId = createMoneyDonationTransaction($_SESSION['user_id'], $amount, $method, $message);
 
@@ -949,130 +965,27 @@ if (
         $error = "Vui lòng thêm ít nhất 1 vật phẩm.";
     }
 
-    /**
-     * Hàm kiểm tra ảnh có chứa nội dung khỏa thân/18+ qua Hugging Face API
-     */
-    function checkNsfwImageHuggingFace(string $imagePath): bool {
-        // API Token của bạn trên Hugging Face
-        $apiToken = "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"; 
-        
-        $apiUrl = "https://api-inference.huggingface.co/models/Qwen/Qwen3.5-35B-A3B";
-
-        if (empty(trim($apiToken)) || $apiToken === 'YOUR_HUGGINGFACE_TOKEN_HERE') {
-            return false; // Bỏ qua nếu chưa cài token
-        }
-
-        $imageData = @file_get_contents($imagePath);
-        if (!$imageData) return false;
-
-        $base64Image = base64_encode($imageData);
-        // Định dạng payload gửi lên Qwen (Text Generation model) thông qua HF Inference API
-        $payload = json_encode([
-            "inputs" => "Classify if this image contains 18+, porn, nudity, or NSFW content. Respond with 'nsfw' if it is inappropriate, or 'safe' if it is clean. Image: " . $base64Image,
-        ]);
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        // Tắt kiểm tra chứng chỉ SSL (sử dụng trên XAMPP)
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0"); // Một số API yêu cầu User-Agent
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Bearer $apiToken",
-            "Content-Type: application/json"
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        // Ghi log để bạn dễ dàng theo dõi lỗi API từ file php_error.log của XAMPP
-        error_log("[NSFW CHECK] HTTP Code: $httpCode | CURL Error: $curlError | Response: $response");
-
-        if ($httpCode === 200 && $response) {
-            $data = json_decode($response, true);
-            // Cấu trúc trả về thường là mảng các object hoặc mảng lồng
-            $items = isset($data[0]) && is_array($data[0]) ? (isset($data[0]['label']) ? $data : $data[0]) : $data;
-            
-            if (is_array($items)) {
-                foreach ($items as $class) {
-                    if (isset($class['label']) && strtolower($class['label']) === 'nsfw' && $class['score'] > 0.6) {
-                        return true;
-                    }
-                }
-            }
-            
-            // Xử lý giá trị trả về của model Qwen LLM
-            $responseText = strtolower($response);
-            if (
-                strpos($responseText, 'nsfw') !== false || 
-                strpos($responseText, '18+') !== false || 
-                strpos($responseText, 'porn') !== false || 
-                strpos($responseText, 'nude') !== false || 
-                strpos($responseText, 'khỏa thân') !== false || 
-                strpos($responseText, 'sex') !== false
-            ) {
-                return true;
-            }
-        } elseif ($httpCode === 503) {
-            // Model đang được tải lên RAM của Hugging Face (sleep)
-            throw new Exception("Hệ thống kiểm duyệt ảnh đang khởi động (Model loading). Vui lòng chờ 30 giây và thử lại.");
-        } elseif ($httpCode !== 200) {
-            throw new Exception("Lỗi hệ thống kiểm duyệt ảnh (Mã lỗi: $httpCode). Vui lòng thử lại sau.");
-        }
-        return false;
-    }
+    $nsfwRejectReason = 'Ảnh quyên góp chứa nội dung 18+ hoặc không phù hợp.';
+    $toxicRejectReason = 'Tên hoặc mô tả chứa từ ngữ tục tĩu, thô thiển hoặc sỉ nhục.';
 
     /**
-     * Hàm kiểm tra nội dung văn bản có chứa từ ngữ tục tĩu, thô thiển qua API Google Gemini
+     * Ghép lý do kiểm duyệt và loại trùng lặp.
      */
-    function checkToxicTextGemini(string $text): bool {
-        $allText = trim($text);
-        // Thay YOUR_GEMINI_API_KEY_HERE bằng API Key của Google Gemini
-        $apiKey = "AIzaSyCve4ReDIG4oWFZzA36sOp2o-I1nIq3Wxw";
-        if (empty(trim($apiKey)) || $apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
-            return false;
+    function appendModerationReason(?string $existing, string $reason): string {
+        $existing = trim((string)$existing);
+        $reason = trim($reason);
+        if ($reason === '') {
+            return $existing;
+        }
+        if ($existing === '') {
+            return $reason;
         }
 
-        $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
-
-        $prompt = "Bạn là công cụ kiểm duyệt nội dung. Hãy kiểm tra xem đoạn văn bản sau đây có chứa từ ngữ tục tĩu, thô thiển, chửi thề, hay sỉ nhục người khác hay không.\nTrả lời CHỈ VỚI 1 CHỮ duy nhất: 'YES' (nếu có vi phạm) hoặc 'NO' (nếu an toàn).\nVăn bản: \"$text\"";
-
-        $postData = json_encode([
-            "contents" => [
-                ["parts" => [["text" => $prompt]]]
-            ]
-        ]);
-
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        error_log("[GEMINI CHECK] HTTP: $httpCode | CURL: $curlError | Content: $allText | Response: $response");
-
-        if ($httpCode === 200 && $response) {
-            $data = json_decode($response, true);
-            if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-                $answer = trim(strtoupper($data['candidates'][0]['content']['parts'][0]['text']));
-                if (strpos($answer, 'YES') !== false || strpos($answer, 'CÓ') !== false) {
-                    return true;
-                }
-            }
+        $parts = array_filter(array_map('trim', explode(';', $existing)));
+        if (!in_array($reason, $parts, true)) {
+            $parts[] = $reason;
         }
-        return false;
+        return implode('; ', $parts);
     }
 
     for ($i = 0; !$error && $i < $count; $i++) {
@@ -1114,15 +1027,31 @@ if (
 
     // Kiểm tra toàn bộ văn bản (Tên & Mô tả) bằng AI Gemini
     if (!$error) {
-        $allTextToCheck = "";
+        $allTextToCheck = $pickup_address_full . "\n";
         foreach ($items as $item) {
             $allTextToCheck .= $item['name'] . "\n" . $item['description'] . "\n";
         }
         
-        if (trim($allTextToCheck) !== '' && checkToxicTextGemini($allTextToCheck)) {
-            // Đánh dấu từ chối thay vì báo lỗi hiển thị luôn (để Admin có dữ liệu)
-            $globalRejectStatus = 'rejected';
-            $globalRejectNotes = 'Hệ thống AI tự động từ chối: Tên hoặc mô tả có chứa từ ngữ tục tĩu, thô thiển hoặc sỉ nhục.';
+        $textViolate = false;
+        $textRejectReason = '';
+        if (trim($allTextToCheck) !== '') {
+            // Bước 1: Kiểm tra local (nhanh, không cần API)
+            $localMatch = checkToxicTextLocal($allTextToCheck);
+            if ($localMatch !== null) {
+                $textViolate = true;
+                $textRejectReason = "Từ bị cấm: " . $localMatch;
+                $globalRejectStatus = 'rejected';
+                $globalRejectNotes = appendModerationReason($globalRejectNotes, $toxicRejectReason . " (phát hiện: $localMatch)");
+            } else {
+                // Bước 2: Kiểm tra Gemini AI (bắt thêm trường hợp local bỏ sót)
+                $geminiCheck = checkToxicTextGemini($allTextToCheck);
+                if ($geminiCheck['violate']) {
+                    $textViolate = true;
+                    $textRejectReason = $geminiCheck['reason'];
+                    $globalRejectStatus = 'rejected';
+                    $globalRejectNotes = appendModerationReason($globalRejectNotes, $toxicRejectReason . " (Lý do: " . $geminiCheck['reason'] . ")");
+                }
+            }
         }
     }
 
@@ -1143,17 +1072,21 @@ if (
                 $itemRejectNotes = $globalRejectNotes;
 
                 // tải ảnh từ URL (Nhập từ Excel/CSV)
+                $imageViolate = false;
                 if (!empty($item['image_urls'])) {
                     $downloadedImages = downloadItemImagesFromUrls($item['image_urls'], 'uploads/donations/');
                     foreach ($downloadedImages as $imgFile) {
                         $imgPath = 'uploads/donations/' . $imgFile;
-                        // Kiểm tra nếu là cảnh NSFW
-                        if (checkNsfwImageHuggingFace($imgPath)) {
+                        // Kiểm tra nếu là cảnh NSFW bằng AI (Gemini)
+                        $imgCheck = checkNsfwImageGemini($imgPath);
+                        if ($imgCheck['violate']) {
                             @unlink($imgPath); // Xóa file tải về nếu vi phạm
                             $itemRejectStatus = 'rejected';
                             $globalRejectStatus = 'rejected';
-                            $globalRejectNotes = 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw';
+                            $globalRejectNotes = appendModerationReason($globalRejectNotes, $imgCheck['reason']);
                             $itemRejectNotes = $globalRejectNotes;
+                            $imageViolate = true;
+                            $imageRejectReason = $imgCheck['reason'];
                         } else {
                             $images[] = $imgFile;
                         }
@@ -1181,16 +1114,18 @@ if (
                             ];
                             $uploadResult = uploadFile($file, $uploadDir);
                             if ($uploadResult['success']) {
-                                // Kiểm tra nội dung 18+ (NSFW)
-                                if (checkNsfwImageHuggingFace($uploadResult['path'])) {
+                                // Kiểm tra nội dung 18+ (NSFW) bằng Gemini API
+                                $imgCheck = checkNsfwImageGemini($uploadResult['path']);
+                                if ($imgCheck['violate']) {
                                     @unlink($uploadResult['path']); // Xóa file ngay lập tức
                                     $itemRejectStatus = 'rejected';
                                     $globalRejectStatus = 'rejected';
-                                    $globalRejectNotes = 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw';
+                                    $globalRejectNotes = appendModerationReason($globalRejectNotes, $imgCheck['reason']);
                                     $itemRejectNotes = $globalRejectNotes;
+                                    $imageViolate = true;
+                                    $imageRejectReason = $imgCheck['reason'];
                                 } else {
                                     $images[] = $uploadResult['filename'];
-                                    
                                     // Tự động upload lên Google Drive (nếu đã cấu hình)
                                     $gdriveId = uploadFileToGoogleDrive(
                                         $uploadResult['path'],
@@ -1242,10 +1177,19 @@ if (
 
             Database::commit();
             if ($globalRejectStatus === 'rejected') {
-                if ($globalRejectNotes === 'Quyên góp đã bị từ chối vì líu do ảnh khồng phù họpw') {
-                    $error = $globalRejectNotes;
+                // Xác định loại vi phạm để hiển thị thông báo chuyên nghiệp
+                if (!empty($textViolate) && !empty($imageViolate)) {
+                    $error = 'Quyên góp bị từ chối vì lý do: Từ ngữ (' . htmlspecialchars($textRejectReason) . ') và hình ảnh (' . htmlspecialchars($imageRejectReason) . ') đều không phù hợp.';
+                } elseif (!empty($textViolate)) {
+                    $error = 'Quyên góp bị từ chối vì lý do: ' . htmlspecialchars($textRejectReason);
+                } elseif (!empty($imageViolate)) {
+                    $error = 'Quyên góp bị từ chối vì lý do: ' . (!empty($imageRejectReason) ? htmlspecialchars($imageRejectReason) : 'Hình ảnh không phù hợp với quy định.');
                 } else {
-                    $error = "Quyên góp của bạn đã bị từ chối tự động vì lý do: " . $globalRejectNotes;
+                    $rejectMessage = trim((string)$globalRejectNotes);
+                    if ($rejectMessage === '') {
+                        $rejectMessage = 'Nội dung quyên góp không phù hợp theo chính sách kiểm duyệt AI.';
+                    }
+                    $error = 'Quyên góp bị từ chối vì lý do: ' . $rejectMessage;
                 }
                 // Không hiển thị success message
                 $success = '';
@@ -1295,29 +1239,25 @@ if (empty($formItems)) {
 include 'includes/header.php';
 ?>
 
-<!-- Main Content -->
-<section class="donate-page">
-    <div class="donate-hero">
-        <div class="container-fluid px-4 px-lg-5">
-            <div class="donate-hero-row">
-                <div class="donate-hero-icon-box">
-                    <i class="bi bi-heart-fill"></i>
+<!-- Hero -->
+<div class="donate-hero">
+    <div class="container">
+        <div class="donate-hero-row">
+            <div class="donate-hero-icon-box">
+                <i class="bi bi-heart-fill"></i>
+            </div>
+            <div class="donate-hero-copy">
+                <div class="hero-heading mb-2">
+                    <h1 class="mb-0 donate-hero-title">Quyên góp cho Goodwill Vietnam</h1>
                 </div>
-                <div class="donate-hero-copy">
-                    <div class="hero-heading mb-2">
-                        <h1 class="mb-0 donate-hero-title">Quyên góp cho Goodwill Vietnam</h1>
-                    </div>
-                    <p class="mb-0 donate-hero-sub">Bạn có thể quyên góp vật phẩm hoặc tiền mặt, theo dõi minh bạch toàn bộ quá trình xử lý.</p>
-                    <div class="donate-hero-badges mt-3">
-                        <span class="hero-badge"><i class="bi bi-shield-check me-2"></i>Minh bạch</span>
-                        <span class="hero-badge"><i class="bi bi-lightning-charge me-2"></i>Xử lý nhanh</span>
-                        <span class="hero-badge"><i class="bi bi-geo-alt me-2"></i>Hỗ trợ toàn quốc</span>
-                    </div>
-                </div>
+                <p class="mb-0 donate-hero-sub">Bạn có thể quyên góp vật phẩm hoặc tiền mặt, theo dõi minh bạch toàn bộ quá trình xử lý.</p>
             </div>
         </div>
     </div>
+</div>
 
+<!-- Main Content -->
+<section class="donate-page">
     <div class="container-fluid px-4 px-lg-5 pt-4 pb-5">
         <div class="row g-4">
             <div class="col-xl-3">
@@ -1332,6 +1272,14 @@ include 'includes/header.php';
                         <li>Ảnh rõ ràng giúp duyệt nhanh hơn.</li>
                         <li>Nên nhập mô tả tình trạng chi tiết.</li>
                         <li>Bạn có thể nhập danh sách bằng Excel/CSV.</li>
+                    </ul>
+                    <hr>
+                    <h6 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>Quy định khi quyên góp</h6>
+                    <ul class="small mb-0 ps-3 text-muted">
+                        <li class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i>Không sử dụng từ ngữ thô tục, phản cảm hoặc nội dung 18+.</li>
+                        <li class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i>Không upload hình ảnh bậy bạ, nhạy cảm hoặc không phù hợp.</li>
+                        <li class="mb-1"><i class="bi bi-geo-alt text-warning me-1"></i>Thông tin địa chỉ nhận hàng phải chính xác, đầy đủ.</li>
+                        <li><i class="bi bi-shield-check text-success me-1"></i>Nội dung được kiểm duyệt tự động bởi AI.</li>
                     </ul>
                 </aside>
             </div>
@@ -1394,9 +1342,18 @@ include 'includes/header.php';
                         <?php endif; ?>
 
                         <?php if ($error): ?>
+                            <?php
+                            $isModReject = (strpos($error, 'Quyên góp bị từ chối') !== false
+                                         || strpos($error, 'từ ngữ không phù hợp') !== false
+                                         || strpos($error, 'vi phạm bởi hệ thống AI') !== false);
+                            ?>
+                            <?php if ($isModReject): ?>
+                                <?= renderModerationError('Quyên góp bị từ chối', str_replace('Quyên góp bị từ chối vì lý do: ', '', $error)) ?>
+                            <?php else: ?>
                             <div class="alert alert-danger" role="alert">
                                 <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
                             </div>
+                            <?php endif; ?>
                         <?php endif; ?>
 
                         <?php if ($paymentSuccess): ?>
@@ -1406,9 +1363,16 @@ include 'includes/header.php';
                         <?php endif; ?>
 
                         <?php if ($paymentError): ?>
-                            <div class="alert alert-danger" role="alert">
-                                <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($paymentError); ?>
-                            </div>
+                            <?php
+                            $isPayModReject = (strpos($paymentError, 'Quyên góp tiền thất bại') !== false);
+                            ?>
+                            <?php if ($isPayModReject): ?>
+                                <?= renderModerationError('Quyên góp tiền thất bại', str_replace('Quyên góp tiền thất bại! ', '', $paymentError)) ?>
+                            <?php else: ?>
+                                <div class="alert alert-danger" role="alert">
+                                    <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($paymentError); ?>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
 
                         <?php
@@ -1612,13 +1576,16 @@ include 'includes/header.php';
     .donate-page {
         background: #f4fafd;
         min-height: calc(100vh - 110px);
+        margin-top: 0;
+        padding-top: 0;
     }
 
     .donate-hero {
         background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
-        padding: 64px 0 52px;
+        padding: 64px 0 48px;
         position: relative;
         overflow: hidden;
+        margin-top: -1px;
     }
 
     .donate-hero::before {
@@ -1637,9 +1604,9 @@ include 'includes/header.php';
     }
 
     .donate-hero-icon-box {
-        width: 90px;
-        height: 90px;
-        border-radius: 24px;
+        width: 134px;
+        height: 134px;
+        border-radius: 34px;
         border: 1px solid rgba(255, 255, 255, 0.25);
         background: rgba(255, 255, 255, 0.15);
         display: flex;
@@ -1650,7 +1617,7 @@ include 'includes/header.php';
     }
 
     .donate-hero-icon-box i {
-        font-size: 2.7rem;
+        font-size: 3.8rem;
         color: rgba(255, 255, 255, 0.95);
     }
 
@@ -1664,17 +1631,19 @@ include 'includes/header.php';
     }
 
     .donate-hero-title {
-        font-size: clamp(1.9rem, 4vw, 2.95rem);
+        font-size: clamp(2.4rem, 5.2vw, 5rem);
         font-weight: 900;
         color: #ffffff;
-        line-height: 1.1;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
     }
 
     .donate-hero-sub {
         color: rgba(255, 255, 255, 0.88);
-        max-width: 900px;
-        font-size: 1.05rem;
+        max-width: 940px;
+        font-size: clamp(1.05rem, 1.7vw, 2.05rem);
         line-height: 1.45;
+        margin-top: 0.7rem;
     }
 
     .donate-hero-badges {

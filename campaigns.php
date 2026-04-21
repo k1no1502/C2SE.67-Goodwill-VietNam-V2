@@ -41,6 +41,7 @@ include 'includes/header.php';
     padding: 64px 0 48px;
     position: relative;
     overflow: hidden;
+    margin-top: -1px;
 }
 .campaigns-hero::before {
     content: '';

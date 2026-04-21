@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 requireLogin();
 
@@ -21,8 +22,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $address = sanitize($_POST['address'] ?? '');
     $avatarPath = $user['avatar'] ?? null;
     
+    if (empty($name)) {
+        $error = 'Vui lòng nhập họ và tên.';
+    } else {
+        // === KIỂM DUYỆT TỪ NGỮ ===
+        $allText = $name . ' ' . $address;
+        $toxicWord = checkToxicTextLocal($allText);
+        if ($toxicWord !== null) {
+            $error = 'Cập nhật thất bại! Tên hoặc địa chỉ chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+        } else {
+            $geminiCheck = checkToxicTextGemini($allText);
+            if ($geminiCheck['violate']) {
+                $error = 'Cập nhật thất bại! ' . htmlspecialchars($geminiCheck['reason']);
+            }
+        }
+    }
+    
     // Handle avatar upload
-    if (isset($_FILES['avatar']) && $_FILES['avatar']['size'] > 0) {
+    if (!$error && isset($_FILES['avatar']) && $_FILES['avatar']['size'] > 0) {
         $file = $_FILES['avatar'];
         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         $maxSize = 5 * 1024 * 1024; // 5MB
@@ -40,17 +57,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mkdir('uploads/avatars', 0755, true);
                 }
                 
-                // Delete old avatar if exists
-                if ($user['avatar'] && file_exists($user['avatar'])) {
-                    unlink($user['avatar']);
-                }
-                
                 // Generate unique filename
                 $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
                 $newFilename = 'uploads/avatars/avatar_' . $_SESSION['user_id'] . '_' . time() . '.' . $ext;
                 
                 if (move_uploaded_file($file['tmp_name'], $newFilename)) {
-                    $avatarPath = $newFilename;
+                    // === KIỂM DUYỆT ẢNH NSFW ===
+                    $imgCheck = checkNsfwImageGemini($newFilename);
+                    if ($imgCheck['violate']) {
+                        @unlink($newFilename);
+                        $error = 'Cập nhật thất bại! ' . $imgCheck['reason'];
+                    } else {
+                        // Delete old avatar if exists (only after successful upload and check)
+                        if ($user['avatar'] && file_exists($user['avatar'])) {
+                            unlink($user['avatar']);
+                        }
+                        $avatarPath = $newFilename;
+                    }
                 } else {
                     $error = 'Không thể lưu file avatar. Vui lòng thử lại.';
                 }
@@ -61,9 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    if (empty($name)) {
-        $error = 'Vui lòng nhập họ và tên.';
-    } else if (!$error) {
+    if (!$error) {
         try {
             Database::execute(
                 "UPDATE users SET name = ?, phone = ?, address = ?, avatar = ?, updated_at = NOW() WHERE user_id = ?",

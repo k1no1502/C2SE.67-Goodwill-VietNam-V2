@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 requireLogin();
 
@@ -356,7 +357,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
         $error = 'Vui lòng nhập số tiền hợp lệ (tối thiểu 1.000 VND).';
     } elseif (!in_array($method, $allowedMethods, true)) {
         $error = 'Vui lòng chọn phương thức thanh toán.';
-    } else {
+    }
+
+    // === KIỂM DUYỆT LỜI NHẮN TIỀN ===
+    if (!$error && $message !== '') {
+        $toxicWord = checkToxicTextLocal($message);
+        if ($toxicWord !== null) {
+            $error = 'Quyên góp thất bại! Lời nhắn chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+        } else {
+            $geminiCheck = checkToxicTextGemini($message);
+            if ($geminiCheck['violate']) {
+                $error = 'Quyên góp thất bại! Lời nhắn bị từ chối: ' . htmlspecialchars($geminiCheck['reason']);
+            }
+        }
+    }
+
+    if (!$error) {
         try {
             $transId = campaignDonateCreateMoneyTransaction($_SESSION['user_id'], $campaign_id, $amount, $method, (string)($campaign['name'] ?? ''), $message);
 
@@ -508,10 +524,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
             $error = 'Vui lï¿½ng ch?n phu?ng/xï¿½.';
         } elseif (empty($pickup_address)) {
             $error = 'Vui lï¿½ng nh?p d?a ch? chi?t vï¿½ t?ng g?n.';
-        } elseif (empty($pickup_date)) {
-            $error = 'Vui lï¿½ng ch?n ngï¿½y l?y hï¿½ng.';
-        } elseif (empty($delivery_date)) {
-            $error = 'Vui lï¿½ng ch?n ngï¿½y giao hï¿½ng.';
         } elseif (empty($address_status)) {
             $error = 'Vui lï¿½ng ch?n lo?i d?a ch?.';
         } elseif (empty($contact_phone)) {
@@ -522,6 +534,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
             $error = 'Vui lï¿½ng ch?n tï¿½nh tr?ng s?n ph?m.';
         }
     } 
+
+    // === KIỂM DUYỆT NỘI DUNG VẬT PHẨM ===
+    if (!$error) {
+        $allText = $item_name . ' ' . $description;
+        $toxicWord = checkToxicTextLocal($allText);
+        if ($toxicWord !== null) {
+            $error = 'Quyên góp thất bại! Tên hoặc mô tả vật phẩm chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+        } else {
+            $geminiCheck = checkToxicTextGemini($allText);
+            if ($geminiCheck['violate']) {
+                $error = 'Quyên góp thất bại! Nội dung bị từ chối: ' . htmlspecialchars($geminiCheck['reason']);
+            }
+        }
+    }
     
     if (!$error) {
         try {
@@ -547,6 +573,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
                         
                         $uploadResult = uploadFile($file, $uploadDir);
                         if ($uploadResult['success']) {
+                            // === KIỂM DUYỆT ẢNH NSFW ===
+                            $fullPath = $uploadDir . $uploadResult['filename'];
+                            if (file_exists($fullPath)) {
+                                $imgCheck = checkNsfwImageGemini($fullPath);
+                                if ($imgCheck['violate']) {
+                                    @unlink($fullPath);
+                                    throw new Exception('Quyên góp thất bại! ' . $imgCheck['reason']);
+                                }
+                            }
                             $images[] = $uploadResult['filename'];
                         }
                     }
@@ -660,16 +695,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
         } catch (Exception $e) {
             Database::rollback();
             error_log("Donate to campaign error: " . $e->getMessage());
-            $error = 'CÃƒÂ³ lÃ¡Â»?i xÃ¡ÂºÂ£y ra. Vui lÃƒÂ²ng thÃ¡Â»Â­ lÃ¡ÂºÂ¡i.';
+            if (strpos($e->getMessage(), 'Quyên góp thất bại') !== false) {
+                $error = $e->getMessage();
+            } else {
+                $error = 'Có lỗi xảy ra. Vui lòng thử lại.';
+            }
         }
     }
 }
 
-$pageTitle = "Quyền góp cho chiến dịch"; 
+$pageTitle = "Quyên góp cho chiến dịch"; 
 include 'includes/header.php';
 ?>
 
-<div class="container mt-5 mb-5">
+<style>
+.donate-campaign-hero {
+    background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+    color: #fff;
+    padding: 64px 0 48px;
+    position: relative;
+    overflow: hidden;
+    margin-top: -1px;
+}
+.donate-campaign-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.07) 0%, transparent 60%);
+}
+.donate-campaign-hero-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+}
+.dc-hero-main {
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+}
+.dc-hero-icon-box {
+    width: 134px;
+    height: 134px;
+    border-radius: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    backdrop-filter: blur(6px);
+}
+.dc-hero-icon-box i {
+    font-size: 3.8rem;
+    color: rgba(255, 255, 255, 0.95);
+}
+.dc-hero-title {
+    font-size: clamp(2.4rem, 5.2vw, 5rem);
+    line-height: 1.05;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+.dc-hero-sub {
+    opacity: 0.88;
+    margin-top: 0.7rem;
+    margin-bottom: 0;
+    font-size: clamp(1.05rem, 1.7vw, 2.05rem);
+    max-width: 940px;
+}
+.dc-hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+.dc-hero-badges .badge {
+    font-size: 0.92rem;
+    font-weight: 500;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.13);
+    border: 1px solid rgba(255,255,255,0.22);
+    backdrop-filter: blur(4px);
+}
+@media (max-width: 991.98px) {
+    .donate-campaign-hero { padding: 38px 0 34px; }
+    .dc-hero-main { gap: 1rem; }
+    .dc-hero-icon-box { width: 90px; height: 90px; border-radius: 20px; }
+    .dc-hero-icon-box i { font-size: 2.45rem; }
+    .dc-hero-title { font-size: clamp(1.8rem, 8vw, 2.8rem); }
+    .dc-hero-sub { font-size: 1rem; }
+}
+</style>
+
+<div class="donate-campaign-hero">
+    <div class="container">
+        <div class="donate-campaign-hero-row">
+            <div class="dc-hero-main">
+                <div class="dc-hero-icon-box">
+                    <i class="bi bi-heart-fill"></i>
+                </div>
+                <div>
+                    <h1 class="dc-hero-title">Quyên góp cho chiến dịch</h1>
+                    <p class="dc-hero-sub">Chung tay đóng góp cho chiến dịch "<?= htmlspecialchars($campaign['name']) ?>" và tạo ra sự thay đổi tích cực</p>
+                    <div class="dc-hero-badges">
+                        <span class="badge"><i class="bi bi-shield-check me-1"></i> Minh bạch</span>
+                        <span class="badge"><i class="bi bi-lightning-charge me-1"></i> Xử lý nhanh</span>
+                        <span class="badge"><i class="bi bi-geo-alt me-1"></i> Hỗ trợ toàn quốc</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-4 mb-5">
     <div class="row">
         <div class="col-lg-8 offset-lg-2">
             <!-- Campaign Header Info -->
@@ -709,10 +851,17 @@ include 'includes/header.php';
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    <i class="bi bi-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                <?php
+                $isModReject = (strpos($error, 'Quyên góp thất bại') !== false);
+                ?>
+                <?php if ($isModReject): ?>
+                    <?= renderModerationError('Quyên góp thất bại', str_replace('Quyên góp thất bại! ', '', $error)) ?>
+                <?php else: ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
 
             <!-- Donation Type Selection -->
@@ -860,33 +1009,37 @@ include 'includes/header.php';
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label for="pickup_city" class="form-label">Thành phố/Tỉnh <span class="text-danger">*</span></label>
-                                <select class="form-select" id="pickup_city" name="pickup_city" required>
-                                    <option value="">-- Chọn --</option>
+                                <label class="form-label">Thành phố/Tỉnh <span class="text-danger">*</span></label>
+                                <select class="form-select" id="pickup_city" name="pickup_city" required data-selected="<?php echo htmlspecialchars($_POST['pickup_city'] ?? ''); ?>">
+                                    <option value="">-- Chọn Thành phố --</option>
                                 </select>
+                                <div class="invalid-feedback">Vui lòng chọn Thành phố</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label for="pickup_district" class="form-label">Quận/Huyện <span class="text-danger">*</span></label>
-                                <select class="form-select" id="pickup_district" name="pickup_district" required>
-                                    <option value="">-- Chọn --</option>
+                                <label class="form-label">Quận/Huyện <span class="text-danger">*</span></label>
+                                <select class="form-select" id="pickup_district" name="pickup_district" required data-selected="<?php echo htmlspecialchars($_POST['pickup_district'] ?? ''); ?>" disabled>
+                                    <option value="">-- Chọn Quận/Huyện --</option>
                                 </select>
+                                <div class="invalid-feedback">Vui lòng chọn Quận/Huyện</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label for="pickup_ward" class="form-label">Phường/Xã <span class="text-danger">*</span></label>
-                                <select class="form-select" id="pickup_ward" name="pickup_ward" required>
-                                    <option value="">-- Chọn --</option>
+                                <label class="form-label">Phường/Xã <span class="text-danger">*</span></label>
+                                <select class="form-select" id="pickup_ward" name="pickup_ward" required data-selected="<?php echo htmlspecialchars($_POST['pickup_ward'] ?? ''); ?>" disabled>
+                                    <option value="">-- Chọn Phường/Xã --</option>
                                 </select>
+                                <div class="invalid-feedback">Vui lòng chọn Phường/Xã</div>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="pickup_address" class="form-label">Địa chỉ chi tiết <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="pickup_address" name="pickup_address" placeholder="VD: 123 Đường Abc, Tòa nhà XYZ..." required>
+                            <label class="form-label">Địa chỉ chi tiết <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="pickup_address" name="pickup_address" rows="2" placeholder="VD: 123 Đường Abc, Tòa nhà XYZ..." required><?php echo htmlspecialchars($_POST['pickup_address'] ?? ''); ?></textarea>
+                            <div class="invalid-feedback">Vui lòng nhập địa chỉ chi tiết</div>
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="address_status" class="form-label">Loại địa chỉ <span class="text-danger">*</span></label>
+                                <label class="form-label">Loại địa chỉ <span class="text-danger">*</span></label>
                                 <select class="form-select" id="address_status" name="address_status" required>
                                     <option value="">-- Chọn --</option>
                                     <option value="home">Nhà riêng</option>
@@ -896,32 +1049,20 @@ include 'includes/header.php';
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="contact_phone" class="form-label">Số điện thoại liên hệ <span class="text-danger">*</span></label>
-                                <input type="tel" class="form-control" id="contact_phone" name="contact_phone" placeholder="0123456789" required>
+                                <label class="form-label">Số điện thoại liên hệ <span class="text-danger">*</span></label>
+                                <input type="tel" class="form-control" id="contact_phone" name="contact_phone" placeholder="0123456789" value="<?php echo htmlspecialchars($_POST['contact_phone'] ?? ''); ?>" required>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Pickup & Delivery Dates -->
-                <div class="card mb-4 border-0 shadow-sm">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Lịch lấy hàng</h5>
-                    </div>
-                    <div class="card-body">
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="pickup_date" class="form-label">Ngày lấy hàng <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="pickup_date" name="pickup_date" required>
+                                <label class="form-label">Ngày Tháng Năm</label>
+                                <input type="date" class="form-control" id="pickup_date" name="pickup_date" value="<?php echo htmlspecialchars($_POST['pickup_date'] ?? ''); ?>" min="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="pickup_time" class="form-label">Giờ lấy hàng</label>
-                                <input type="time" class="form-control" id="pickup_time" name="pickup_time">
+                                <label class="form-label">Giờ nhận hàng</label>
+                                <input type="time" class="form-control" id="pickup_time" name="pickup_time" value="<?php echo htmlspecialchars($_POST['pickup_time'] ?? ''); ?>">
                             </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="delivery_date" class="form-label">Ngày giao hàng dự kiến <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="delivery_date" name="delivery_date" required>
                         </div>
                     </div>
                 </div>
@@ -1032,20 +1173,6 @@ include 'includes/header.php';
 <?php
 $additionalScripts = <<<'SCRIPT'
 <script>
-// Vietnam location data
-const vietnamData = {
-    'Hà Nội': {
-        'Ba Đình': ['Phúc Tân', 'Đội Cấn', 'Nguyễn Du', 'Cát Linh', 'Quảng An'],
-        'Hoàn Kiếm': ['Hàng Bài', 'Hàng Gai', 'Hàng Buồm', 'Tràng Tiền', 'Lý Thái Tổ'],
-        'Hai Bà Trưng': ['Phạm Ngọc Thạch', 'Lê Đại Hành', 'Quỳnh Mai', 'Ngô Quyền', 'Định Công']
-    },
-    'TP. Hồ Chí Minh': {
-        'Quận 1': ['Phường Bến Nghé', 'Phường Bến Thành', 'Phường Đa Kao', 'Phường Tân Định'],
-        'Quận 2': ['Phường An Khánh', 'Phường An Lợi Đông', 'Phường Bình An', 'Phường Cát Lái'],
-        'Quận 3': ['Phường 1', 'Phường 2', 'Phường 3', 'Phường 4', 'Phường 5']
-    }
-};
-
 document.addEventListener('DOMContentLoaded', function() {
     const donateTypeRadios = document.querySelectorAll('input[name="donate_type_selector"]');
     const itemDonationForm = document.getElementById('itemDonationForm');
@@ -1055,9 +1182,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const customDonationSection = document.getElementById('customDonationSection');
     const campaignItemSelect = document.getElementById('campaign_item_id');
     const productInfoCard = document.getElementById('productInfoCard');
-    const pickupCitySelect = document.getElementById('pickup_city');
-    const pickupDistrictSelect = document.getElementById('pickup_district');
-    const pickupWardSelect = document.getElementById('pickup_ward');
     const quantityCampaign = document.getElementById('quantity_campaign');
     const quantityCustom = document.getElementById('quantity_custom');
     const unitDisplay = document.getElementById('unitDisplay');
@@ -1126,43 +1250,144 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Populate city dropdown
-    Object.keys(vietnamData).forEach(city => {
-        const option = document.createElement('option');
-        option.value = city;
-        option.textContent = city;
-        pickupCitySelect.appendChild(option);
-    });
+    // Vietnamese address selects (City/District/Ward) via local JSON API
+    (function () {
+        const cityEl = document.getElementById('pickup_city');
+        const districtEl = document.getElementById('pickup_district');
+        const wardEl = document.getElementById('pickup_ward');
+        if (!cityEl || !districtEl || !wardEl) return;
 
-    // Cascading dropdown - City to District
-    pickupCitySelect.addEventListener('change', function() {
-        pickupDistrictSelect.innerHTML = '<option value=\"\">-- Chọn --</option>';
-        pickupWardSelect.innerHTML = '<option value=\"\">-- Chọn --</option>';
-        
-        if (this.value) {
-            Object.keys(vietnamData[this.value]).forEach(district => {
-                const option = document.createElement('option');
-                option.value = district;
-                option.textContent = district;
-                pickupDistrictSelect.appendChild(option);
-            });
-        }
-    });
+        const API_BASE = 'api/vn-address.php';
 
-    // Cascading dropdown - District to Ward
-    pickupDistrictSelect.addEventListener('change', function() {
-        pickupWardSelect.innerHTML = '<option value=\"\">-- Chọn --</option>';
-        
-        const city = pickupCitySelect.value;
-        if (city && this.value) {
-            vietnamData[city][this.value].forEach(ward => {
-                const option = document.createElement('option');
-                option.value = ward;
-                option.textContent = ward;
-                pickupWardSelect.appendChild(option);
-            });
-        }
-    });
+        const clearSelect = (el, placeholder) => {
+            el.innerHTML = '';
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = placeholder;
+            el.appendChild(opt);
+            el.value = '';
+        };
+
+        const setSelectedByValue = (el, value) => {
+            if (!value) return false;
+            const options = Array.from(el.options);
+            const found = options.find(o => (o.value || '').trim() === value.trim());
+            if (found) {
+                el.value = found.value;
+                return true;
+            }
+            return false;
+        };
+
+        const populate = (el, items, placeholder) => {
+            clearSelect(el, placeholder);
+            for (const item of items) {
+                const opt = document.createElement('option');
+                opt.value = item.name;
+                opt.textContent = item.name;
+                opt.dataset.code = String(item.code);
+                el.appendChild(opt);
+            }
+        };
+
+        const fetchJson = async (url) => {
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        };
+
+        const loadCities = async () => {
+            const provinces = await fetchJson(`${API_BASE}?type=provinces`);
+            populate(cityEl, provinces, '-- Chọn Thành phố --');
+            cityEl.disabled = false;
+        };
+
+        const loadDistricts = async (provinceCode) => {
+            const districts = await fetchJson(`${API_BASE}?type=districts&province_code=${encodeURIComponent(provinceCode)}`);
+            populate(districtEl, districts, '-- Chọn Quận/Huyện --');
+            districtEl.disabled = false;
+        };
+
+        const loadWards = async (districtCode) => {
+            const wards = await fetchJson(`${API_BASE}?type=wards&district_code=${encodeURIComponent(districtCode)}`);
+            populate(wardEl, wards, '-- Chọn Phường/Xã --');
+            wardEl.disabled = false;
+        };
+
+        const getSelectedCode = (el) => {
+            const opt = el.options[el.selectedIndex];
+            return opt ? (opt.dataset.code || '') : '';
+        };
+
+        const init = async () => {
+            clearSelect(districtEl, '-- Chọn Quận/Huyện --');
+            clearSelect(wardEl, '-- Chọn Phường/Xã --');
+            districtEl.disabled = true;
+            wardEl.disabled = true;
+
+            try {
+                await loadCities();
+            } catch (e) {
+                console.error('Failed to load provinces:', e);
+                cityEl.disabled = false;
+                return;
+            }
+
+            const selectedCity = cityEl.dataset.selected || '';
+            const selectedDistrict = districtEl.dataset.selected || '';
+            const selectedWard = wardEl.dataset.selected || '';
+
+            if (setSelectedByValue(cityEl, selectedCity)) {
+                const pCode = getSelectedCode(cityEl);
+                if (pCode) {
+                    try {
+                        await loadDistricts(pCode);
+                        if (setSelectedByValue(districtEl, selectedDistrict)) {
+                            const dCode = getSelectedCode(districtEl);
+                            if (dCode) {
+                                await loadWards(dCode);
+                                setSelectedByValue(wardEl, selectedWard);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to restore address selects:', e);
+                    }
+                }
+            }
+        };
+
+        cityEl.addEventListener('change', async () => {
+            clearSelect(districtEl, '-- Chọn Quận/Huyện --');
+            clearSelect(wardEl, '-- Chọn Phường/Xã --');
+            districtEl.disabled = true;
+            wardEl.disabled = true;
+
+            const provinceCode = getSelectedCode(cityEl);
+            if (!provinceCode) return;
+
+            try {
+                await loadDistricts(provinceCode);
+            } catch (e) {
+                console.error('Failed to load districts:', e);
+            }
+        });
+
+        districtEl.addEventListener('change', async () => {
+            clearSelect(wardEl, '-- Chọn Phường/Xã --');
+            wardEl.disabled = true;
+
+            const districtCode = getSelectedCode(districtEl);
+            if (!districtCode) return;
+
+            try {
+                await loadWards(districtCode);
+            } catch (e) {
+                console.error('Failed to load wards:', e);
+            }
+        });
+
+        init();
+    })();
 
     if (showPaymentOptionsBtn && moneyPaymentOptions) {
         showPaymentOptionsBtn.addEventListener('click', function() {
