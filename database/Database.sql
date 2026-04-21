@@ -37,6 +37,7 @@ DROP TABLE IF EXISTS admin_notifications;
 DROP TABLE IF EXISTS feedback;
 DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS chat_typing_status;
 DROP TABLE IF EXISTS chat_sessions;
 DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS system_settings;
@@ -462,6 +463,18 @@ CREATE TABLE chat_messages (
     INDEX idx_chat_messages_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Chat Typing Status (realtime typing indicator)
+CREATE TABLE chat_typing_status (
+    chat_id INT PRIMARY KEY,
+    user_typing TINYINT(1) NOT NULL DEFAULT 0,
+    staff_typing TINYINT(1) NOT NULL DEFAULT 0,
+    user_updated_at DATETIME NULL,
+    staff_updated_at DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_chat_typing_chat FOREIGN KEY (chat_id) REFERENCES chat_sessions(chat_id) ON DELETE CASCADE,
+    INDEX idx_chat_typing_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================================
 -- ADMIN & STAFF TABLES
 -- ============================================================================
@@ -723,11 +736,11 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin2@goodwillvietnam.com'
 
 -- Seeds: Test Accounts (test1..test10 / password: 123456)
 INSERT INTO users (name, email, password, phone, address, role_id, status, email_verified, created_at) VALUES
-    ('Test User 1', 'test1@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 2', 'test2@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 3', 'test3@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 4', 'test4@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 5', 'test5@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
+    ('Test User 1', 'test1@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 2', 'test2@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 3', 'test3@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 4', 'test4@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 5', 'test5@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
     ('Test User 6', 'test6@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
     ('Test User 7', 'test7@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
     ('Test User 8', 'test8@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
@@ -741,6 +754,25 @@ ON DUPLICATE KEY UPDATE
     role_id = VALUES(role_id),
     status = VALUES(status),
     email_verified = VALUES(email_verified),
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Seeds: Staff records for Test Users 1-5
+-- Test User 1 = Thu ngân, Test User 2 = Tư vấn chăm sóc khách hàng, Test User 3 = Quản lý kho hàng
+-- Test User 4 = Quản lý đơn hàng, Test User 5 = Quản lý chiến dịch
+INSERT INTO staff (user_id, employee_id, position, department, phone, hire_date, status, created_at)
+SELECT u.user_id, emp.eid, emp.pos, emp.dept, '0123456789', CURDATE(), 'active', NOW()
+FROM (
+    SELECT 'test1@goodwillvietnam.com' AS email, 'GW-TST-001' AS eid, 'Thu ngân' AS pos, 'Thu ngân' AS dept
+    UNION ALL SELECT 'test2@goodwillvietnam.com', 'GW-TST-002', 'Tư vấn chăm sóc khách hàng', 'Tư vấn'
+    UNION ALL SELECT 'test3@goodwillvietnam.com', 'GW-TST-003', 'Quản lý kho hàng', 'Kho hàng'
+    UNION ALL SELECT 'test4@goodwillvietnam.com', 'GW-TST-004', 'Quản lý đơn hàng', 'Đơn hàng'
+    UNION ALL SELECT 'test5@goodwillvietnam.com', 'GW-TST-005', 'Quản lý chiến dịch', 'Chiến dịch'
+) emp
+JOIN users u ON u.email = emp.email
+ON DUPLICATE KEY UPDATE
+    position = VALUES(position),
+    department = VALUES(department),
+    status = 'active',
     updated_at = CURRENT_TIMESTAMP;
 
 -- Seeds: System Settings
@@ -919,6 +951,18 @@ SELECT
 FROM campaign_items ci
 LEFT JOIN campaigns c ON ci.campaign_id = c.campaign_id
 LEFT JOIN categories cat ON ci.category_id = cat.category_id;
+
+CREATE OR REPLACE VIEW v_chat_daily_history AS
+SELECT
+    DATE(cm.created_at) AS chat_date,
+    cs.staff_id,
+    COUNT(DISTINCT cm.chat_id) AS total_chats,
+    COUNT(*) AS total_messages,
+    SUM(cm.sender_type = 'user') AS user_messages,
+    SUM(cm.sender_type = 'staff') AS staff_messages
+FROM chat_messages cm
+JOIN chat_sessions cs ON cs.chat_id = cm.chat_id
+GROUP BY DATE(cm.created_at), cs.staff_id;
 
 -- ============================================================================
 -- TRIGGERS

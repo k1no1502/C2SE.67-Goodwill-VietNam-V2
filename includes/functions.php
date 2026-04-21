@@ -701,11 +701,16 @@ function displayFlashMessages() {
     foreach ($types as $type) {
         $message = getFlashMessage($type);
         if ($message) {
-            $alertClass = 'alert-' . ($type === 'error' ? 'danger' : $type);
-            $html .= '<div class="alert ' . $alertClass . ' alert-dismissible fade show" role="alert">';
-            $html .= htmlspecialchars($message);
-            $html .= '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-            $html .= '</div>';
+            // Nếu là error và message đã là HTML alert block thì in thẳng ra
+            if ($type === 'error' && strpos($message, 'alert-heading') !== false && strpos($message, 'alert-danger') !== false) {
+                $html .= $message;
+            } else {
+                $alertClass = 'alert-' . ($type === 'error' ? 'danger' : $type);
+                $html .= '<div class="alert ' . $alertClass . ' alert-dismissible fade show" role="alert">';
+                $html .= htmlspecialchars($message);
+                $html .= '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                $html .= '</div>';
+            }
         }
     }
     

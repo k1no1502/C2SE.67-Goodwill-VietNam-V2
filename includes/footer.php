@@ -122,53 +122,58 @@
     <style>
         .chat-widget-toggle {
             position: fixed !important;
-            right: 20px;
-            bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-            left: auto;
-            top: auto;
-            z-index: 99999;
-            height: 46px;
-            border-radius: 8px;
-            border: 1px solid #666b74;
-            background: linear-gradient(180deg, #4b5058 0%, #32363d 100%);
+            left: 20px !important;
+            right: auto !important;
+            bottom: 20px !important;
+            top: auto !important;
+            z-index: 2147483647;
+            height: 50px;
+            border-radius: 25px;
+            border: none;
+            background: linear-gradient(135deg, #3a8d8c 0%, #2b7a78 100%);
             color: #fff;
-            font-size: 20px;
-            box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+            box-shadow: 0 4px 16px rgba(43, 122, 120, 0.5), 0 2px 6px rgba(0,0,0,0.18);
             cursor: pointer;
-            padding: 0 14px;
-            display: inline-flex;
+            padding: 0 20px;
+            display: inline-flex !important;
             align-items: center;
             gap: 10px;
             font-weight: 700;
-            letter-spacing: 0.01em;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            animation: chatTogglePulse 2.5s ease-in-out infinite;
+        }
+        @keyframes chatTogglePulse {
+            0%, 100% { box-shadow: 0 4px 16px rgba(43, 122, 120, 0.5), 0 2px 6px rgba(0,0,0,0.18); }
+            50% { box-shadow: 0 4px 24px rgba(43, 122, 120, 0.75), 0 2px 10px rgba(0,0,0,0.22); }
         }
         .chat-widget-toggle:hover {
-            background: linear-gradient(180deg, #565b64 0%, #3b3f47 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+            box-shadow: 0 6px 24px rgba(43, 122, 120, 0.65), 0 3px 10px rgba(0,0,0,0.2);
+            animation: none;
         }
         .chat-widget-toggle:active {
-            transform: translateY(0);
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transform: scale(0.97);
+            animation: none;
         }
         .chat-widget-toggle:focus-visible {
             outline: 2px solid #8b95a5;
             outline-offset: 2px;
         }
         .chat-widget-toggle-label {
-            font-size: 18px;
+            font-size: 16px;
             line-height: 1;
         }
         .chat-widget-toggle i {
-            font-size: 24px;
+            font-size: 22px;
             line-height: 1;
         }
         .chat-widget-panel {
             position: fixed !important;
-            right: 88px;
-            bottom: calc(56px + max(8px, env(safe-area-inset-bottom, 0px)));
-            z-index: 99999;
+            left: 20px !important;
+            right: auto !important;
+            bottom: 80px !important;
+            top: auto !important;
+            z-index: 2147483647;
             width: 340px;
             height: 500px;
             max-width: calc(100vw - 40px);
@@ -197,7 +202,8 @@
             gap: 6px;
             position: relative;
         }
-        .chat-mode-toggle {
+        .chat-mode-toggle,
+        .chat-widget-clear {
             background: rgba(255, 255, 255, 0.16);
             border: 1px solid rgba(255, 255, 255, 0.28);
             color: #fff;
@@ -210,7 +216,8 @@
             font-size: 16px;
             line-height: 1;
         }
-        .chat-mode-toggle:hover {
+        .chat-mode-toggle:hover,
+        .chat-widget-clear:hover {
             background: rgba(255, 255, 255, 0.24);
         }
         .chat-mode-menu {
@@ -385,7 +392,7 @@
             width: 7px;
             height: 7px;
             border-radius: 50%;
-            background: #94a3b8;
+            background: #111;
             opacity: 0.45;
             animation: chatTypingPulse 1s infinite ease-in-out;
         }
@@ -434,26 +441,21 @@
 
         @media (max-width: 768px) {
             .chat-widget-toggle {
-                left: 16px;
-                right: 16px;
-                bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-                width: calc(100vw - 32px);
-                height: 42px;
-                padding: 0 12px;
-                justify-content: center;
+                left: 14px !important;
+                right: auto !important;
+                bottom: 14px !important;
+                height: 44px;
+                padding: 0 16px;
             }
 
             .chat-widget-toggle-label {
-                font-size: 16px;
-            }
-
-            .chat-widget-toggle i {
-                font-size: 21px;
+                font-size: 14px;
             }
 
             .chat-widget-panel {
-                right: 16px;
-                bottom: calc(50px + max(8px, env(safe-area-inset-bottom, 0px)));
+                left: 14px !important;
+                right: auto !important;
+                bottom: 68px !important;
                 width: calc(100vw - 32px);
                 height: min(70vh, 520px);
                 max-width: 420px;
@@ -463,17 +465,20 @@
         }
     </style>
     <button class="chat-widget-toggle" type="button" aria-label="Mo ho tro" id="chatWidgetToggle">
+        <i class="bi bi-chat-dots-fill"></i>
         <span class="chat-widget-toggle-label">Hỗ trợ</span>
-        <i class="bi bi-list"></i>
     </button>
     <div class="chat-widget-panel" id="chatWidgetPanel" role="dialog" aria-live="polite">
         <div class="chat-widget-header">
             <div>
-                <div class="chat-widget-title" id="chatWidgetTitle"><span class="chat-widget-online-indicator"></span><span id="chatWidgetTitleText">Nhan vien tu van</span></div>
+                <div class="chat-widget-title" id="chatWidgetTitle"><span class="chat-widget-online-indicator"></span><span id="chatWidgetTitleText">Nhân viên tư vấn</span></div>
                 <div class="chat-widget-subtitle" id="chatWidgetStaff">Dang ket noi...</div>
             </div>
             <div class="chat-widget-header-actions">
-                <button class="chat-mode-toggle" type="button" aria-label="Chon kieu chat" id="chatWidgetModeToggle">
+                <button class="chat-widget-clear" type="button" aria-label="Xoa lich su" id="chatWidgetClear" title="Xóa lịch sử trò chuyện">
+                    <i class="bi bi-trash"></i>
+                </button>
+                <button class="chat-mode-toggle" type="button" aria-label="Chon kieu chat" id="chatWidgetModeToggle" title="Đổi kiểu Menu AI / Trực tiếp">
                     <i class="bi bi-list"></i>
                 </button>
                 <div class="chat-mode-menu" id="chatWidgetModeMenu">
@@ -485,7 +490,7 @@
                     </button>
                     <button class="chat-mode-option" type="button" data-mode="staff" id="chatModeStaff">
                         <span class="chat-mode-option-icon"><i class="bi bi-person-badge"></i></span>
-                        <span class="chat-mode-option-copy">Chat voi nhan vien tu van<br><small>Ho tro truc tiep</small></span>
+                        <span class="chat-mode-option-copy">Chat với hỗ trợ<br><small>Hỗ trợ trực tiếp</small></span>
                         <span class="chat-mode-check"><i class="bi bi-check-circle-fill"></i></span>
                     </button>
                 </div>
@@ -587,6 +592,7 @@
             var panel = document.getElementById('chatWidgetPanel');
             var closeBtn = document.getElementById('chatWidgetClose');
             var modeToggle = document.getElementById('chatWidgetModeToggle');
+            var clearBtn = document.getElementById('chatWidgetClear');
             var modeMenu = document.getElementById('chatWidgetModeMenu');
             var modeAiBtn = document.getElementById('chatModeAi');
             var modeStaffBtn = document.getElementById('chatModeStaff');
@@ -597,10 +603,16 @@
             var sendBtn = document.getElementById('chatWidgetSend');
             var chatId = null;
             var loading = false;
-            var currentMode = 'ai';
+            var currentMode = 'staff';
             var hasShownModeMenuOnce = false;
             var aiGreeting = 'Chào mừng bạn đến với GoodWill Việt Nam, không biết bạn cần  mình giúp gì không nhỉ ?';
             var panelResizeTimer = null;
+            var staffPollTimer = null;
+            var aiFallbackTimer = null;
+            var lastStaffMessageSignature = '';
+            var staffTypingNode = null;
+            var typingDebounceTimer = null;
+            var typingIdleTimer = null;
             var STORAGE_PANEL_SIZE = 'gw_chat_panel_size_v1';
             var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -810,7 +822,98 @@
                     var senderType = item.sender_type === 'user' ? 'user' : 'staff';
                     appendMessage(item.message, senderType);
                 });
+                if (messages.length > 0) {
+                    var last = messages[messages.length - 1];
+                    lastStaffMessageSignature = messages.length + '|' + (last.sender_type || '') + '|' + (last.created_at || '');
+                } else {
+                    lastStaffMessageSignature = '0';
+                }
                 saveChatHistoryToStorage();
+            }
+
+            function stopStaffPolling() {
+                if (staffPollTimer) {
+                    window.clearInterval(staffPollTimer);
+                    staffPollTimer = null;
+                }
+            }
+
+            function showStaffTypingIndicator(show) {
+                if (show) {
+                    if (staffTypingNode) {
+                        return;
+                    }
+                    staffTypingNode = showTypingIndicator();
+                    return;
+                }
+
+                if (staffTypingNode && staffTypingNode.parentNode) {
+                    staffTypingNode.parentNode.removeChild(staffTypingNode);
+                }
+                staffTypingNode = null;
+            }
+
+            function sendTypingState(isTyping) {
+                if (currentMode !== 'staff' || !chatId) {
+                    return Promise.resolve();
+                }
+
+                var typingData = new FormData();
+                typingData.append('chat_id', String(chatId));
+                typingData.append('is_typing', isTyping ? '1' : '0');
+                return fetch('api/chat-typing.php', {
+                    method: 'POST',
+                    body: typingData
+                }).catch(function () {});
+            }
+
+            function pollStaffMessages(forceRender) {
+                if (currentMode !== 'staff' || !chatId) {
+                    return;
+                }
+
+                var formBody = new URLSearchParams();
+                formBody.append('chat_id', String(chatId));
+
+                fetch('api/chat-get-messages.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formBody.toString()
+                })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        if (!data.success) {
+                            return;
+                        }
+
+                        var list = Array.isArray(data.messages) ? data.messages : [];
+                        var signature = '0';
+                        if (list.length > 0) {
+                            var last = list[list.length - 1];
+                            signature = list.length + '|' + (last.sender_type || '') + '|' + (last.created_at || '');
+                            if (last.sender_type === 'staff' && aiFallbackTimer) {
+                                window.clearTimeout(aiFallbackTimer);
+                                aiFallbackTimer = null;
+                            }
+                        }
+
+                        if (forceRender || signature !== lastStaffMessageSignature) {
+                            renderMessages(list);
+                        }
+
+                        showStaffTypingIndicator(!!(data.typing && data.typing.staff));
+                    })
+                    .catch(function () {});
+            }
+
+            function startStaffPolling() {
+                stopStaffPolling();
+                pollStaffMessages(true);
+                staffPollTimer = window.setInterval(function () {
+                    pollStaffMessages(false);
+                }, 2000);
             }
 
             function setModeButtonState() {
@@ -828,6 +931,8 @@
                 showModeMenu(false);
 
                 if (mode === 'ai') {
+                    stopStaffPolling();
+                    showStaffTypingIndicator(false);
                     titleEl.innerHTML = '<span class="chat-widget-online-indicator"></span><span>Tư vấn AI 24/24</span>';
                     staffLabel.textContent = 'GoodWill Viet Nam';
                     messagesEl.innerHTML = '';
@@ -877,12 +982,65 @@
                         renderMessages(Array.isArray(data.messages) ? data.messages : []);
                         setInputEnabled(true);
                         input.focus();
+                        startStaffPolling();
                     })
                     .catch(function () {
                         loading = false;
                         staffLabel.textContent = 'He thong';
                         appendMessage('Khong the ket noi.', 'staff');
                     });
+            }
+
+            function triggerAutoAi(text) {
+                currentMode = 'ai';
+                setModeButtonState();
+                stopStaffPolling();
+                showStaffTypingIndicator(false);
+                titleEl.innerHTML = '<span class="chat-widget-online-indicator"></span><span>Tư vấn AI 24/24</span>';
+                staffLabel.textContent = 'Hệ thống tự động (AI)';
+                
+                appendMessage('Hiện tại các tư vấn viên đang bận. Trợ lý AI sẽ tiếp tục hỗ trợ bạn nhé!', 'staff');
+                
+                sendBtn.disabled = true;
+                input.disabled = true;
+                var typingAiNode = showTypingIndicator();
+
+                var aiFormData = new FormData();
+                aiFormData.append('message', text);
+
+                fetch('api/chat-ai-send.php', {
+                    method: 'POST',
+                    body: aiFormData
+                })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (typingAiNode && typingAiNode.parentNode) {
+                        typingAiNode.parentNode.removeChild(typingAiNode);
+                        typingAiNode = null;
+                    }
+                    if (data.reply) {
+                        return appendMessageTyping(data.reply, 'staff');
+                    }
+                    if (data.message) {
+                        return appendMessageTyping(data.message, 'staff');
+                    }
+                    return appendMessageTyping('Xin loi, minh chua nhan duoc phan hoi.', 'staff');
+                })
+                .catch(function () {
+                    if (typingAiNode && typingAiNode.parentNode) {
+                        typingAiNode.parentNode.removeChild(typingAiNode);
+                        typingAiNode = null;
+                    }
+                    return appendMessageTyping('Vui lòng liên hệ hotline: 0964821707 để được hỗ trợ thêm.', 'staff');
+                })
+                .finally(function () {
+                    if (typingAiNode && typingAiNode.parentNode) {
+                        typingAiNode.parentNode.removeChild(typingAiNode);
+                    }
+                    sendBtn.disabled = false;
+                    input.disabled = false;
+                    input.focus();
+                });
             }
 
             function sendMessage() {
@@ -911,17 +1069,20 @@
                                 typingAiNode.parentNode.removeChild(typingAiNode);
                                 typingAiNode = null;
                             }
-                            if (!data.success) {
-                                return appendMessageTyping(data.message || 'Khong gui duoc tin nhan den Gemini.', 'staff');
+                            if (data.reply) {
+                                return appendMessageTyping(data.reply, 'staff');
                             }
-                            return appendMessageTyping(data.reply || 'Xin loi, minh chua nhan duoc phan hoi.', 'staff');
+                            if (data.message) {
+                                return appendMessageTyping(data.message, 'staff');
+                            }
+                            return appendMessageTyping('Xin loi, minh chua nhan duoc phan hoi.', 'staff');
                         })
                         .catch(function () {
                             if (typingAiNode && typingAiNode.parentNode) {
                                 typingAiNode.parentNode.removeChild(typingAiNode);
                                 typingAiNode = null;
                             }
-                            return appendMessageTyping('Khong gui duoc tin nhan den Gemini.', 'staff');
+                            return appendMessageTyping('Vui lòng liên hệ đến số hotline: 0964821707 để được hỗ trợ thêm', 'staff');
                         })
                         .finally(function () {
                             if (typingAiNode && typingAiNode.parentNode) {
@@ -936,7 +1097,9 @@
 
                 var formData = new FormData();
                 formData.append('message', text);
-                var typingStaffNode = showTypingIndicator();
+
+                sendTypingState(false);
+                showStaffTypingIndicator(false);
 
                 fetch('api/chat-send.php', {
                     method: 'POST',
@@ -944,46 +1107,34 @@
                 })
                     .then(function (response) { return response.json(); })
                     .then(function (data) {
-                        if (typingStaffNode && typingStaffNode.parentNode) {
-                            typingStaffNode.parentNode.removeChild(typingStaffNode);
-                            typingStaffNode = null;
-                        }
                         if (!data.success) {
                             return appendMessageTyping(data.message || 'Khong gui duoc tin nhan.', 'staff');
                         }
-                        if (Array.isArray(data.replies)) {
-                            var chain = Promise.resolve();
-                            data.replies.forEach(function (reply) {
-                                chain = chain.then(function () {
-                                    return appendMessageTyping(reply.message, 'staff');
-                                });
-                            });
-                            return chain;
+                        pollStaffMessages(true);
+                        
+                        if (aiFallbackTimer) {
+                            window.clearTimeout(aiFallbackTimer);
                         }
+                        aiFallbackTimer = window.setTimeout(function() {
+                            triggerAutoAi(text);
+                        }, 10000);
                     })
                     .catch(function () {
-                        if (typingStaffNode && typingStaffNode.parentNode) {
-                            typingStaffNode.parentNode.removeChild(typingStaffNode);
-                            typingStaffNode = null;
-                        }
                         return appendMessageTyping('Khong gui duoc tin nhan.', 'staff');
-                    })
-                    .finally(function () {
-                        if (typingStaffNode && typingStaffNode.parentNode) {
-                            typingStaffNode.parentNode.removeChild(typingStaffNode);
-                        }
                     });
             }
 
             toggle.addEventListener('click', function () {
                 var isOpen = panel.style.display === 'flex';
                 panel.style.display = isOpen ? 'none' : 'flex';
+                if (isOpen) {
+                    showModeMenu(false);
+                    sendTypingState(false);
+                    stopStaffPolling();
+                    showStaffTypingIndicator(false);
+                    return;
+                }
                 if (!isOpen) {
-                    if (!hasShownModeMenuOnce) {
-                        showModeMenu(true);
-                        hasShownModeMenuOnce = true;
-                    }
-                    
                     // Try to restore previous chat when reopening panel
                     var stored = loadChatHistoryFromStorage();
                     if (!stored && currentMode === 'ai') {
@@ -1038,6 +1189,30 @@
                 closeBtn.addEventListener('click', function () {
                     panel.style.display = 'none';
                     showModeMenu(false);
+                    sendTypingState(false);
+                    stopStaffPolling();
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (!confirm('Bạn có chắc chắn muốn xóa lịch sử trò chuyện cục bộ này không? (Nhân viên vẫn có thể xem được tin nhắn trước đó)')) return;
+                    
+                    // Clear frontend messages
+                    messagesEl.innerHTML = '';
+                    sessionStorage.removeItem('gw_chat_history');
+                    
+                    if (currentMode === 'staff' && chatId) {
+                        var clearForm = new URLSearchParams();
+                        clearForm.append('chat_id', String(chatId));
+                        fetch('api/chat-clear.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: clearForm.toString()
+                        });
+                    } else if (currentMode === 'ai') {
+                        appendMessage(aiGreeting, 'staff');
+                    }
                 });
             }
 
@@ -1064,6 +1239,37 @@
                     event.preventDefault();
                     sendMessage();
                 }
+            });
+
+            input.addEventListener('input', function () {
+                if (currentMode !== 'staff' || !chatId) {
+                    return;
+                }
+
+                if (typingDebounceTimer) {
+                    window.clearTimeout(typingDebounceTimer);
+                }
+                typingDebounceTimer = window.setTimeout(function () {
+                    sendTypingState(true);
+                }, 120);
+
+                if (typingIdleTimer) {
+                    window.clearTimeout(typingIdleTimer);
+                }
+                typingIdleTimer = window.setTimeout(function () {
+                    sendTypingState(false);
+                }, 1400);
+            });
+
+            input.addEventListener('blur', function () {
+                if (currentMode === 'staff' && chatId) {
+                    sendTypingState(false);
+                }
+            });
+
+            window.addEventListener('beforeunload', function () {
+                sendTypingState(false);
+                stopStaffPolling();
             });
         })();
     </script>

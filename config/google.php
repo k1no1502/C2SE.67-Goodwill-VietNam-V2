@@ -1,7 +1,7 @@
 <?php
 return [
     // Gemini API key for chatbot (Google AI Studio)
-    'gemini_api_key' => 'AIzaSyCve4ReDIG4oWFZzA36sOp2o-I1nIq3Wxw',
+    'gemini_api_key' => 'AIzaSyAtXi17Js7QdelHPQM9fSzHI0hUdt0FG3k',
 
     // Google Maps Platform API key (enable Places API; billing required)
     // How to set:

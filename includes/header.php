@@ -13,6 +13,14 @@ $pageTitle = $pageTitle ?? "Goodwill Vietnam";
 processScheduledAdminNotifications();
 $notificationCount = isLoggedIn() ? getUnreadNotificationCount($_SESSION['user_id']) : 0;
 $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
+
+$hasActiveCampaign = false;
+if (isLoggedIn()) {
+    $activeCampaignCount = Database::fetch("SELECT COUNT(*) as cnt FROM campaigns WHERE created_by = ? AND status IN ('pending', 'active', 'paused')", [$_SESSION['user_id']]);
+    if ($activeCampaignCount && $activeCampaignCount['cnt'] > 0) {
+        $hasActiveCampaign = true;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -33,28 +41,22 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
     <style>
         html.page-transition-enabled body {
             opacity: 0;
-            transform: translateY(10px) scale(0.995);
-            transition: opacity 170ms cubic-bezier(0.22, 1, 0.36, 1), transform 170ms cubic-bezier(0.22, 1, 0.36, 1);
-            will-change: opacity, transform;
+            transition: opacity 170ms cubic-bezier(0.22, 1, 0.36, 1);
         }
         html.page-transition-enabled body.page-entered {
             opacity: 1;
-            transform: none;
         }
         html.page-transition-enabled body.page-leaving {
             opacity: 0;
-            transform: translateY(-8px) scale(0.995);
             pointer-events: none;
         }
         @media (prefers-reduced-motion: reduce) {
             html.page-transition-enabled body {
                 transition: none;
-                transform: none;
             }
             html.page-transition-enabled body.page-entered,
             html.page-transition-enabled body.page-leaving {
                 opacity: 1;
-                transform: none;
             }
         }
         .gw-navbar {
@@ -519,12 +521,21 @@ $currentPage = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
                                             $staffPanelLink = 'admin/campaigns-panel.php';
                                         } elseif ($roleKey === 'thu ngân' || $roleKey === 'thu ngan') {
                                             $staffPanelLink = 'admin/cashier-direct-sale.php';
+                                        } elseif ($roleKey === 'tư vấn chăm sóc khách hàng' || $roleKey === 'tu van cham soc khach hang') {
+                                            $staffPanelLink = 'admin/advisor-panel.php';
                                         }
                                     ?>
                                     <li><a class="dropdown-item" href="<?php echo htmlspecialchars($staffPanelLink, ENT_QUOTES, 'UTF-8'); ?>">
                                         <i class="bi bi-briefcase me-2"></i>Panel công việc
                                     </a></li>
                                 <?php endif; ?>
+                                
+                                <?php if ($hasActiveCampaign): ?>
+                                    <li><a class="dropdown-item" href="campaign-panel.php">
+                                        <i class="bi bi-gear-fill me-2"></i>Panel Chiến dịch
+                                    </a></li>
+                                <?php endif; ?>
+                                
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="change-password.php">
                                     <i class="bi bi-key me-2"></i>Đổi mật khẩu

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Payment gateway configuration.
  *
@@ -22,7 +22,7 @@ return [
         'request_type' => 'captureWallet',
         'partner_name' => 'Test',
         'store_id'    => 'MomoTestStore',
-        // URL MoMo redirect sau khi thanh toán
+        // URL MoMo redirect sau khi thanh toÃ¡n
         'return_url'  => 'http://localhost/donate.php',
         'notify_url'  => 'http://localhost/api/momo_notify.php',
     ],
@@ -38,8 +38,16 @@ return [
         // Bank account details to show for manual transfer
         'account_name' => 'Organization Name',
         'account_number' => '0123456789',
-        'bank_name' => 'Ngân hàng ABC',
-        'branch' => 'Chi nhánh XYZ',
-        'note' => 'Vui lòng ghi "Quyên góp" và mã giao dịch trong nội dung chuyển khoản.',
+        'bank_name' => 'NgÃ¢n hÃ ng ABC',
+        'branch' => 'Chi nhÃ¡nh XYZ',
+        'note' => 'Vui lÃ²ng ghi "QuyÃªn gÃ³p" vÃ  mÃ£ giao dá»‹ch trong ná»™i dung chuyá»ƒn khoáº£n.',
+    ],
+
+    'vnpay' => [
+        'tmn_code' => 'CGXZLS0Z',
+        'hash_secret' => 'XNBCJFAKAZQSGTARRLGCHVZWCIOIGSHN',
+        'endpoint' => 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
     ],
 ];
+
+

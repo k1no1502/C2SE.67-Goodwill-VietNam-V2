@@ -32,6 +32,19 @@ try {
     } elseif ($panelType === 'cashier') {
         $r = Database::fetch("SELECT COUNT(*) AS c FROM inventory WHERE status = 'available' AND is_for_sale = 1");
         $sidePending = (int)($r['c'] ?? 0);
+    } elseif ($panelType === 'support') {
+        $advisorRow = Database::fetch(
+            "SELECT staff_id FROM staff WHERE user_id = ? AND status = 'active'",
+            [(int)($_SESSION['user_id'] ?? 0)]
+        );
+        $advisorStaffId = (int)($advisorRow['staff_id'] ?? 0);
+        if ($advisorStaffId > 0) {
+            $r = Database::fetch(
+                "SELECT COUNT(*) AS c FROM chat_sessions WHERE staff_id = ? AND status = 'open'",
+                [$advisorStaffId]
+            );
+            $sidePending = (int)($r['c'] ?? 0);
+        }
     }
 } catch (Exception $e) { /* ignore */ }
 
@@ -66,6 +79,12 @@ $sideMenus = [
         'items' => [
             ['id' => 'cashier-panel',       'href' => 'cashier-panel.php',       'icon' => 'bi-speedometer2', 'label' => 'Kho hàng'],
             ['id' => 'cashier-direct-sale', 'href' => 'cashier-direct-sale.php', 'icon' => 'bi-upc-scan',     'label' => 'Thu ngân'],
+        ],
+    ],
+    'support' => [
+        'title' => 'TƯ VẤN VIÊN',
+        'items' => [
+            ['id' => 'advisor-panel', 'href' => 'advisor-panel.php', 'icon' => 'bi-chat-heart-fill', 'label' => 'Tổng quan chat', 'badge' => $sidePending],
         ],
     ],
 ];

@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
         if (!is_array($cart) || empty($cart)) {
             $error = 'Vui lòng chọn ít nhất 1 sản phẩm.';
-        } elseif (!in_array($paymentMethod, ['cash', 'bank_transfer', 'momo'], true)) {
+        } elseif (!in_array($paymentMethod, ['cash', 'bank_transfer', 'momo', 'zalopay'], true)) {
             $error = 'Phương thức thanh toán không hợp lệ.';
         } else {
             try {
@@ -178,8 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                     throw new Exception('Không có dữ liệu giỏ hàng hợp lệ.');
                 }
 
-                $payment = $paymentMethod === 'cash' ? 'cod' : ($paymentMethod === 'momo' ? 'momo' : 'bank_transfer');
-                $paymentStatus = $paymentMethod === 'momo' ? 'pending' : 'paid';
+                $payment = $paymentMethod === 'cash' ? 'cod' : ($paymentMethod === 'momo' ? 'momo' : ($paymentMethod === 'zalopay' ? 'zalopay' : 'bank_transfer'));
+                $paymentStatus = ($paymentMethod === 'momo' || $paymentMethod === 'zalopay') ? 'pending' : 'paid';
 
                 Database::execute(
                     "INSERT INTO orders
@@ -221,6 +221,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
                 logActivity((int)($_SESSION['user_id'] ?? 0), 'cashier_direct_sale', 'Bill #' . $orderId);
                 Database::commit();
+
+                if ($paymentMethod === 'zalopay') {
+                    $vnp_TmnCode = "CGXZLS0Z"; // Replace locally if different
+                    $vnp_HashSecret = "YOUR_ZaloPay_SECRET_X_REPLACE_LATER"; 
+                    // To do sandbox tests, use genuine Sandbox Keys if any. Let's use standard placeholders or generic codes.
+                    
+                    // Note: ZaloPay requires paymentConfig? Let's check config/payment.php
+                    // We'll read from config/payment.php if available, otherwise fallback to generic sandbox
+                    $paymentConfigPath = __DIR__ . '/../config/payment.php';
+                    $paymentConfig = file_exists($paymentConfigPath) ? require $paymentConfigPath : [];
+                    $vnpCfg = $paymentConfig['zalopay'] ?? [];
+                    
+                    $vnp_TmnCode    = !empty($vnpCfg['tmn_code']) ? $vnpCfg['tmn_code'] : "CGXZLS0Z";
+                    $vnp_HashSecret = !empty($vnpCfg['hash_secret']) ? $vnpCfg['hash_secret'] : "ZIXSGNQZDDHTFWKNYUWYTETKAYQDFKRR";
+                    $vnp_Url        = !empty($vnpCfg['endpoint']) ? $vnpCfg['endpoint'] : "https://sandbox.ZaloPayment.vn/paymentv2/vpcpay.html";
+                    
+                    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+                    $scheme = $isHttps ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                    $baseUrl = $scheme . '://' . $host;
+                    
+                    $vnp_Returnurl = $baseUrl . '/admin/cashier-direct-sale.php?zalopay_return=1&pos_order_id=' . $orderId;
+
+                    $vnp_TxnRef = $orderId . '_' . time(); 
+                    $vnp_OrderInfo = "Thanh toan don hang POS #" . $orderId;
+                    $vnp_OrderType = 'billpayment';
+                    $vnp_Amount = round($totalAmount) * 100;
+                    $vnp_Locale = 'vn';
+                    $vnp_IpAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+                    $timezoneOriginal = date_default_timezone_get();
+                    date_default_timezone_set('Asia/Ho_Chi_Minh');
+                    $vnp_CreateDate = date('YmdHis');
+                    $vnp_ExpireDate = date('YmdHis', strtotime('+15 minutes'));
+                    date_default_timezone_set($timezoneOriginal);
+
+                    $inputData = array(
+                        "vnp_Version" => "2.1.0",
+                        "vnp_TmnCode" => $vnp_TmnCode,
+                        "vnp_Amount" => $vnp_Amount,
+                        "vnp_Command" => "pay",
+                        "vnp_CreateDate" => $vnp_CreateDate,
+                        "vnp_CurrCode" => "VND",
+                        "vnp_IpAddr" => $vnp_IpAddr,
+                        "vnp_Locale" => $vnp_Locale,
+                        "vnp_OrderInfo" => $vnp_OrderInfo,
+                        "vnp_OrderType" => $vnp_OrderType,
+                        "vnp_ReturnUrl" => $vnp_Returnurl,
+                        "vnp_TxnRef" => $vnp_TxnRef,
+                        "vnp_ExpireDate" => $vnp_ExpireDate
+                    );
+
+                    ksort($inputData);
+                    $query = "";
+                    $i = 0;
+                    $hashdata = "";
+
+                    foreach ($inputData as $key => $value) {
+                        if ($i == 1) {
+                            $hashdata .= '&' . urlencode($key) . "=" . urlencode($value);
+                        } else {
+                            $hashdata .= urlencode($key) . "=" . urlencode($value);
+                            $i = 1;
+                        }
+                        $query .= urlencode($key) . "=" . urlencode($value) . '&';
+                    }
+
+                    $vnp_Url = $vnp_Url . "?" . $query;
+                    if (!empty($vnp_HashSecret)) {
+                        $vnpSecureHash = hash_hmac('sha512', $hashdata, $vnp_HashSecret);
+                        $vnp_Url .= 'vnp_SecureHash=' . $vnpSecureHash;
+                    }
+                    
+                    header('Location: ' . $vnp_Url);
+                    exit;
+                }
 
                 if ($paymentMethod === 'momo') {
                     $paymentConfigPath = __DIR__ . '/../config/payment.php';
@@ -1398,18 +1474,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                                         <i class="bi bi-cash-coin"></i>
                                         <span>Tiền mặt</span>
                                     </button>
-                                    <button class="pay-opt" type="button" data-method="bank_transfer">
-                                        <i class="bi bi-bank"></i>
-                                        <span>CK</span>
-                                    </button>
+                                    <button class="pay-opt" type="button" data-method="ZaloPay"><i class="bi bi-credit-card"></i><span>ZaloPay</span></button>
                                     <button class="pay-opt" type="button" data-method="momo">
                                         <i class="bi bi-wallet2"></i>
                                         <span>MoMo</span>
                                     </button>
-                                    <button class="pay-opt" type="button" data-method="bank_transfer" style="display:none;">
-                                        <i class="bi bi-credit-card"></i>
-                                        <span>Thẻ</span>
-                                    </button>
+                                    
                                 </div>
                             </div>
                         </div>
@@ -2057,3 +2127,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 </script>
 </body>
 </html>
+
