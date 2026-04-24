@@ -24,7 +24,7 @@ try {
     }
 
     if (!$chat) {
-        // Find available advisor staff (role_id = 4 is staff role)
+        // Find available support advisor staff only
         $staff = Database::fetch(
             "SELECT s.staff_id, u.name, u.user_id
              FROM staff s
@@ -32,6 +32,7 @@ try {
              WHERE s.status = 'active'
                AND u.status = 'active'
                AND u.role_id = 4
+               AND LOWER(s.position) LIKE '%tư vấn%'
              ORDER BY RAND()
              LIMIT 1"
         );

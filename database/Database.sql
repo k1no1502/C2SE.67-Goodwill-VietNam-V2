@@ -37,6 +37,7 @@ DROP TABLE IF EXISTS admin_notifications;
 DROP TABLE IF EXISTS feedback;
 DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS chat_typing_status;
 DROP TABLE IF EXISTS chat_sessions;
 DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS system_settings;
@@ -220,7 +221,7 @@ CREATE TABLE transactions (
     type ENUM('donation', 'purchase', 'reservation', 'cancellation') NOT NULL,
     amount DECIMAL(10,2) DEFAULT 0,
     status ENUM('pending', 'completed', 'cancelled', 'refunded') DEFAULT 'pending',
-    payment_method ENUM('cash', 'bank_transfer', 'credit_card', 'free') DEFAULT 'free',
+    payment_method ENUM('cash', 'bank_transfer', 'credit_card', 'momo', 'zalopay', 'free') DEFAULT 'free',
     payment_reference VARCHAR(100),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -462,6 +463,18 @@ CREATE TABLE chat_messages (
     INDEX idx_chat_messages_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Chat Typing Status (realtime typing indicator)
+CREATE TABLE chat_typing_status (
+    chat_id INT PRIMARY KEY,
+    user_typing TINYINT(1) NOT NULL DEFAULT 0,
+    staff_typing TINYINT(1) NOT NULL DEFAULT 0,
+    user_updated_at DATETIME NULL,
+    staff_updated_at DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_chat_typing_chat FOREIGN KEY (chat_id) REFERENCES chat_sessions(chat_id) ON DELETE CASCADE,
+    INDEX idx_chat_typing_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================================
 -- ADMIN & STAFF TABLES
 -- ============================================================================
@@ -683,10 +696,10 @@ CREATE INDEX idx_cart_user ON cart(user_id);
 
 -- Seeds: Roles
 INSERT INTO roles (role_id, role_name, description, permissions) VALUES
-    (1, 'quáº£n trá»‹ viÃªn', 'Quáº£n trá»‹ viÃªn há»‡ thá»‘ng', '{"all": true}'),
-    (2, 'ngÆ°á»i dÃ¹ng', 'NgÆ°á»i dÃ¹ng Ä‘Ã£ Ä‘Äƒng kÃ½', '{"donate": true, "browse": true, "order": true}'),
-    (3, 'khÃ¡ch', 'KhÃ¡ch', '{"browse": true}'),
-    (4, 'nhÃ¢n viÃªn', 'NhÃ¢n viÃªn', '{"staff": true}')
+    (1, 'quản trị viên', 'Quản trị viên hệ thống', '{"all": true}'),
+    (2, 'người dùng', 'Người dùng đã đăng ký', '{"donate": true, "browse": true, "order": true}'),
+    (3, 'khách', 'Khách', '{"browse": true}'),
+    (4, 'nhân viên', 'Nhân viên', '{"staff": true}')
 ON DUPLICATE KEY UPDATE
     role_name = VALUES(role_name),
     description = VALUES(description),
@@ -694,14 +707,14 @@ ON DUPLICATE KEY UPDATE
 
 -- Seeds: Categories
 INSERT INTO categories (category_id, name, description, icon, sort_order) VALUES
-    (1, 'Quáº§n Ã¡o', 'CÃ¡c máº·t hÃ ng quáº§n Ã¡o', 'bi-tshirt', 1),
-    (2, 'Äiá»‡n tá»­', 'Äiá»‡n thoáº¡i vÃ  mÃ¡y tÃ­nh', 'bi-laptop', 2),
-    (3, 'SÃ¡ch', 'SÃ¡ch vÃ  tÃ i liá»‡u', 'bi-book', 3),
-    (4, 'Gia dá»¥ng', 'CÃ¡c máº·t hÃ ng gia dá»¥ng', 'bi-house', 4),
-    (5, 'Äá»“ chÆ¡i', 'Äá»“ chÆ¡i cho tráº» em', 'bi-toy', 5),
-    (6, 'Thá»±c pháº©m', 'Thá»±c pháº©m vÃ  lÆ°Æ¡ng thá»±c', 'bi-basket', 6),
-    (7, 'Y táº¿', 'Váº­t tÆ° y táº¿', 'bi-heart-pulse', 7),
-    (8, 'KhÃ¡c', 'CÃ¡c máº·t hÃ ng khÃ¡c', 'bi-box', 8)
+    (1, 'Quần áo', 'Các mặt hàng quần áo', 'bi-tshirt', 1),
+    (2, 'Điện tử', 'Điện thoại và máy tính', 'bi-laptop', 2),
+    (3, 'Sách', 'Sách và tài liệu', 'bi-book', 3),
+    (4, 'Gia dụng', 'Các mặt hàng gia dụng', 'bi-house', 4),
+    (5, 'Đồ chơi', 'Đồ chơi cho trẻ em', 'bi-toy', 5),
+    (6, 'Thực phẩm', 'Thực phẩm và lương thực', 'bi-basket', 6),
+    (7, 'Y tế', 'Vật tư y tế', 'bi-heart-pulse', 7),
+    (8, 'Khác', 'Các mặt hàng khác', 'bi-box', 8)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     description = VALUES(description),
@@ -723,11 +736,11 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin2@goodwillvietnam.com'
 
 -- Seeds: Test Accounts (test1..test10 / password: 123456)
 INSERT INTO users (name, email, password, phone, address, role_id, status, email_verified, created_at) VALUES
-    ('Test User 1', 'test1@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 2', 'test2@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 3', 'test3@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 4', 'test4@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
-    ('Test User 5', 'test5@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
+    ('Test User 1', 'test1@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 2', 'test2@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 3', 'test3@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 4', 'test4@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
+    ('Test User 5', 'test5@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 4, 'active', TRUE, NOW()),
     ('Test User 6', 'test6@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
     ('Test User 7', 'test7@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
     ('Test User 8', 'test8@goodwillvietnam.com', '$2y$10$.VjMYdqqksAnJf6Q/zWMp.IVAW3Xa0/WDwo0RAiicyomCabwh5RCO', '0123456789', 'Test Address', 2, 'active', TRUE, NOW()),
@@ -741,6 +754,25 @@ ON DUPLICATE KEY UPDATE
     role_id = VALUES(role_id),
     status = VALUES(status),
     email_verified = VALUES(email_verified),
+    updated_at = CURRENT_TIMESTAMP;
+
+-- Seeds: Staff records for Test Users 1-5
+-- Test User 1 = Thu ngân, Test User 2 = Tư vấn chăm sóc khách hàng, Test User 3 = Quản lý kho hàng
+-- Test User 4 = Quản lý đơn hàng, Test User 5 = Quản lý chiến dịch
+INSERT INTO staff (user_id, employee_id, position, department, phone, hire_date, status, created_at)
+SELECT u.user_id, emp.eid, emp.pos, emp.dept, '0123456789', CURDATE(), 'active', NOW()
+FROM (
+    SELECT 'test1@goodwillvietnam.com' AS email, 'GW-TST-001' AS eid, 'Thu ngân' AS pos, 'Thu ngân' AS dept
+    UNION ALL SELECT 'test2@goodwillvietnam.com', 'GW-TST-002', 'Tư vấn chăm sóc khách hàng', 'Tư vấn'
+    UNION ALL SELECT 'test3@goodwillvietnam.com', 'GW-TST-003', 'Quản lý kho hàng', 'Kho hàng'
+    UNION ALL SELECT 'test4@goodwillvietnam.com', 'GW-TST-004', 'Quản lý đơn hàng', 'Đơn hàng'
+    UNION ALL SELECT 'test5@goodwillvietnam.com', 'GW-TST-005', 'Quản lý chiến dịch', 'Chiến dịch'
+) emp
+JOIN users u ON u.email = emp.email
+ON DUPLICATE KEY UPDATE
+    position = VALUES(position),
+    department = VALUES(department),
+    status = 'active',
     updated_at = CURRENT_TIMESTAMP;
 
 -- Seeds: System Settings
@@ -920,6 +952,18 @@ FROM campaign_items ci
 LEFT JOIN campaigns c ON ci.campaign_id = c.campaign_id
 LEFT JOIN categories cat ON ci.category_id = cat.category_id;
 
+CREATE OR REPLACE VIEW v_chat_daily_history AS
+SELECT
+    DATE(cm.created_at) AS chat_date,
+    cs.staff_id,
+    COUNT(DISTINCT cm.chat_id) AS total_chats,
+    COUNT(*) AS total_messages,
+    SUM(cm.sender_type = 'user') AS user_messages,
+    SUM(cm.sender_type = 'staff') AS staff_messages
+FROM chat_messages cm
+JOIN chat_sessions cs ON cs.chat_id = cm.chat_id
+GROUP BY DATE(cm.created_at), cs.staff_id;
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -1022,6 +1066,226 @@ SET images = JSON_ARRAY('placeholder-default.svg')
 WHERE images IS NULL
     OR JSON_VALID(images) = 0
     OR JSON_LENGTH(images) = 0;
+
+-- ============================================================================
+-- AI CONTENT MODERATION TABLES
+-- (Phục vụ train AI kiểm duyệt hình ảnh thô tục & ngôn ngữ 18+)
+-- ============================================================================
+
+-- Kết quả kiểm duyệt nội dung tự động (ảnh + văn bản)
+DROP TABLE IF EXISTS content_moderation_results;
+CREATE TABLE content_moderation_results (
+    result_id       INT PRIMARY KEY AUTO_INCREMENT,
+    -- Tham chiếu nguồn nội dung
+    content_type    ENUM('image', 'text') NOT NULL,
+    source_table    VARCHAR(64) NOT NULL COMMENT 'donations | inventory | chat_messages | feedback',
+    source_id       INT NOT NULL           COMMENT 'PK của bản ghi nguồn',
+    source_field    VARCHAR(64) NOT NULL   COMMENT 'images | message | description | review_text ...',
+    -- Dữ liệu gốc (ảnh: đường dẫn file; văn bản: nội dung)
+    raw_value       TEXT NOT NULL,
+    -- Kết quả AI
+    model_name      VARCHAR(100) NOT NULL  COMMENT 'Tên/phiên bản model đã dùng',
+    model_version   VARCHAR(50)  NULL,
+    is_nsfw         BOOLEAN NOT NULL DEFAULT FALSE  COMMENT 'TRUE = vi phạm 18+',
+    confidence      DECIMAL(5,4) NULL              COMMENT '0.0000 – 1.0000',
+    labels          JSON         NULL              COMMENT 'Chi tiết nhãn / lý do vi phạm',
+    -- Xử lý sau kiểm duyệt
+    action_taken    ENUM('none', 'flagged', 'hidden', 'deleted', 'approved') DEFAULT 'none',
+    reviewed_by     INT          NULL              COMMENT 'NULL = tự động; có giá trị = kiểm duyệt viên',
+    reviewed_at     TIMESTAMP    NULL,
+    review_note     TEXT         NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cmr_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_cmr_source    (source_table, source_id),
+    INDEX idx_cmr_nsfw      (is_nsfw),
+    INDEX idx_cmr_action    (action_taken),
+    INDEX idx_cmr_model     (model_name),
+    INDEX idx_cmr_created   (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Lưu kết quả kiểm duyệt nội dung tự động (hình ảnh + văn bản 18+)';
+
+-- Dữ liệu huấn luyện AI có nhãn (labeled dataset)
+DROP TABLE IF EXISTS ai_training_data;
+CREATE TABLE ai_training_data (
+    sample_id       INT PRIMARY KEY AUTO_INCREMENT,
+    data_type       ENUM('image', 'text') NOT NULL,
+    -- Nội dung mẫu
+    file_path       VARCHAR(500) NULL    COMMENT 'Đường dẫn ảnh (data_type = image)',
+    text_content    TEXT         NULL    COMMENT 'Văn bản mẫu (data_type = text)',
+    language        VARCHAR(10)  NULL DEFAULT 'vi' COMMENT 'vi | en | ...',
+    -- Nhãn (label)
+    label           ENUM('safe', 'nsfw', 'suggestive', 'hate_speech', 'spam', 'other') NOT NULL,
+    label_detail    VARCHAR(255) NULL    COMMENT 'Mô tả chi tiết nhãn',
+    confidence      DECIMAL(5,4) NULL    COMMENT 'Độ tin cậy của nhãn (1.0 = chắc chắn)',
+    -- Nguồn gốc & kiểm tra chéo
+    source          ENUM('manual', 'ai_flagged', 'user_report', 'import') DEFAULT 'manual',
+    origin_result_id INT NULL            COMMENT 'FK tới content_moderation_results nếu lấy từ kết quả AI',
+    is_verified     BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Đã được người kiểm tra xác nhận',
+    verified_by     INT  NULL,
+    verified_at     TIMESTAMP NULL,
+    labeled_by      INT  NULL,
+    labeled_at      TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Sử dụng trong training
+    split_set       ENUM('train', 'validation', 'test') DEFAULT 'train',
+    dataset_version VARCHAR(30) NULL     COMMENT 'v1.0, v1.1...',
+    notes           TEXT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_atd_labeled_by   FOREIGN KEY (labeled_by)   REFERENCES users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_atd_verified_by  FOREIGN KEY (verified_by)  REFERENCES users(user_id) ON DELETE SET NULL,
+    CONSTRAINT fk_atd_origin       FOREIGN KEY (origin_result_id) REFERENCES content_moderation_results(result_id) ON DELETE SET NULL,
+    INDEX idx_atd_type      (data_type),
+    INDEX idx_atd_label     (label),
+    INDEX idx_atd_split     (split_set),
+    INDEX idx_atd_verified  (is_verified),
+    INDEX idx_atd_version   (dataset_version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Dataset có nhãn để huấn luyện mô hình kiểm duyệt nội dung';
+
+-- Từ/cụm từ bị cấm (blacklist cho lọc văn bản 18+)
+DROP TABLE IF EXISTS ai_moderation_keywords;
+CREATE TABLE ai_moderation_keywords (
+    keyword_id      INT PRIMARY KEY AUTO_INCREMENT,
+    keyword         VARCHAR(255) NOT NULL,
+    match_mode      ENUM('exact', 'partial', 'regex') DEFAULT 'partial'
+                    COMMENT 'exact=khớp chính xác; partial=chứa chuỗi; regex=biểu thức',
+    category        ENUM('nsfw', 'hate_speech', 'spam', 'violence', 'other') DEFAULT 'nsfw',
+    severity        TINYINT UNSIGNED NOT NULL DEFAULT 1
+                    COMMENT '1=nhẹ(cảnh báo), 2=trung bình(ẩn), 3=nặng(xóa ngay)',
+    language        VARCHAR(10) NULL DEFAULT 'vi',
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    added_by        INT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_amk_added_by FOREIGN KEY (added_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    UNIQUE KEY uniq_keyword_lang (keyword, language),
+    INDEX idx_amk_active    (is_active),
+    INDEX idx_amk_category  (category),
+    INDEX idx_amk_severity  (severity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Danh sách từ/cụm từ cấm dùng để lọc văn bản thô tục';
+
+-- Báo cáo nội dung vi phạm từ người dùng
+DROP TABLE IF EXISTS user_content_reports;
+CREATE TABLE user_content_reports (
+    report_id       INT PRIMARY KEY AUTO_INCREMENT,
+    reporter_id     INT NOT NULL               COMMENT 'Người báo cáo',
+    content_type    ENUM('image', 'text', 'profile', 'item', 'campaign') NOT NULL,
+    source_table    VARCHAR(64) NOT NULL,
+    source_id       INT NOT NULL,
+    reason          ENUM('nsfw', 'hate_speech', 'spam', 'violence', 'misinformation', 'other') NOT NULL,
+    description     TEXT NULL,
+    status          ENUM('pending', 'reviewed', 'actioned', 'dismissed') DEFAULT 'pending',
+    reviewed_by     INT NULL,
+    reviewed_at     TIMESTAMP NULL,
+    review_note     TEXT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ucr_reporter    FOREIGN KEY (reporter_id)  REFERENCES users(user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_ucr_reviewer    FOREIGN KEY (reviewed_by)  REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_ucr_status   (status),
+    INDEX idx_ucr_source   (source_table, source_id),
+    INDEX idx_ucr_reporter (reporter_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Báo cáo nội dung vi phạm do người dùng gửi';
+
+-- Phiên bản và số liệu các mô hình AI đã triển khai
+DROP TABLE IF EXISTS ai_model_versions;
+CREATE TABLE ai_model_versions (
+    version_id      INT PRIMARY KEY AUTO_INCREMENT,
+    model_name      VARCHAR(100) NOT NULL,
+    version_tag     VARCHAR(50)  NOT NULL COMMENT 'v1.0, v2.3-beta...',
+    model_type      ENUM('image_nsfw', 'text_nsfw', 'combined') NOT NULL,
+    description     TEXT NULL,
+    file_path       VARCHAR(500) NULL     COMMENT 'Đường dẫn tới file model',
+    -- Số liệu đánh giá
+    accuracy        DECIMAL(5,4) NULL,
+    precision_score DECIMAL(5,4) NULL,
+    recall_score    DECIMAL(5,4) NULL,
+    f1_score        DECIMAL(5,4) NULL,
+    test_samples    INT NULL              COMMENT 'Số mẫu đã dùng để test',
+    -- Trạng thái
+    is_active       BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE = đang dùng trên production',
+    trained_at      DATETIME NULL,
+    deployed_at     DATETIME NULL,
+    deprecated_at   DATETIME NULL,
+    trained_by      INT NULL,
+    notes           TEXT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_amv_trained_by FOREIGN KEY (trained_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    UNIQUE KEY uniq_model_version (model_name, version_tag),
+    INDEX idx_amv_active (is_active),
+    INDEX idx_amv_type   (model_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Lịch sử và số liệu các phiên bản mô hình AI kiểm duyệt';
+
+-- ============================================================================
+-- CỘT KIỂM DUYỆT BỔ SUNG VÀO CÁC BẢNG HIỆN CÓ
+-- ============================================================================
+
+-- donations: đánh dấu ảnh quyên góp bị cờ vi phạm
+ALTER TABLE donations
+    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending'
+        COMMENT 'Trạng thái kiểm duyệt ảnh/mô tả quyên góp',
+    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL
+        COMMENT 'Điểm NSFW (0.0 = an toàn, 1.0 = vi phạm nặng)',
+    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL
+        COMMENT 'Thời điểm kiểm duyệt gần nhất';
+
+-- inventory: đánh dấu ảnh sản phẩm bị cờ vi phạm
+ALTER TABLE inventory
+    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL,
+    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL;
+
+-- chat_messages: lọc ngôn ngữ thô tục trong chat
+ALTER TABLE chat_messages
+    ADD COLUMN IF NOT EXISTS is_flagged         BOOLEAN NOT NULL DEFAULT FALSE
+        COMMENT 'TRUE = tin nhắn bị AI đánh dấu vi phạm',
+    ADD COLUMN IF NOT EXISTS flag_reason        VARCHAR(255) NULL
+        COMMENT 'Lý do bị cờ (từ khóa / nhãn AI)',
+    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'removed') DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL;
+
+-- feedback: lọc nội dung phản hồi vi phạm
+ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL,
+    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL;
+
+-- ============================================================================
+-- INDEX CHO CÁC CỘT KIỂM DUYỆT MỚI
+-- ============================================================================
+
+CREATE INDEX IF NOT EXISTS idx_donations_mod_status  ON donations   (moderation_status);
+CREATE INDEX IF NOT EXISTS idx_inventory_mod_status  ON inventory   (moderation_status);
+CREATE INDEX IF NOT EXISTS idx_chat_flagged          ON chat_messages (is_flagged);
+CREATE INDEX IF NOT EXISTS idx_chat_mod_status       ON chat_messages (moderation_status);
+CREATE INDEX IF NOT EXISTS idx_feedback_mod_status   ON feedback    (moderation_status);
+
+-- ============================================================================
+-- SEED DỮ LIỆU: Một số từ tiêu cực tiêu biểu (có thể mở rộng)
+-- ============================================================================
+
+INSERT INTO ai_moderation_keywords (keyword, match_mode, category, severity, language, is_active) VALUES
+    ('địt',     'partial', 'nsfw',       3, 'vi', TRUE),
+    ('lồn',     'partial', 'nsfw',       3, 'vi', TRUE),
+    ('cặc',     'partial', 'nsfw',       3, 'vi', TRUE),
+    ('đụ',      'partial', 'nsfw',       3, 'vi', TRUE),
+    ('vãi lồn', 'partial', 'nsfw',       3, 'vi', TRUE),
+    ('đéo',     'partial', 'nsfw',       2, 'vi', TRUE),
+    ('fuck',    'partial', 'nsfw',       3, 'en', TRUE),
+    ('shit',    'partial', 'nsfw',       2, 'en', TRUE),
+    ('porn',    'partial', 'nsfw',       3, 'en', TRUE),
+    ('nude',    'partial', 'nsfw',       2, 'en', TRUE),
+    ('18+',     'exact',   'nsfw',       1, 'vi', TRUE),
+    ('sex',     'exact',   'nsfw',       2, 'en', TRUE)
+ON DUPLICATE KEY UPDATE
+    category = VALUES(category),
+    severity = VALUES(severity),
+    is_active = VALUES(is_active);
 
 -- ============================================================================
 -- FINAL COMMIT

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Payment gateway configuration.
  *
@@ -14,14 +14,17 @@
 
 return [
     'momo' => [
-        // Sandbox credentials (replace with your own)
-        'partner_code' => '',
-        'access_key' => '',
-        'secret_key' => '',
-        'endpoint' => 'https://test-payment.momo.vn/v2/gateway/api/create',
-        // Pay URL returned in response.
-        'return_url' => 'http://localhost/GW_VN%20Ver%20Final/donate.php',
-        'notify_url' => 'http://localhost/GW_VN%20Ver%20Final/api/momo_notify.php',
+        // MoMo sandbox test credentials (from https://github.com/momo-wallet/payment)
+        'partner_code' => 'MOMOBKUN20180529',
+        'access_key'  => 'klm05TvNBzhg7h7j',
+        'secret_key'  => 'at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa',
+        'endpoint'    => 'https://test-payment.momo.vn/v2/gateway/api/create',
+        'request_type' => 'captureWallet',
+        'partner_name' => 'Test',
+        'store_id'    => 'MomoTestStore',
+        // URL MoMo redirect sau khi thanh toÃ¡n
+        'return_url'  => 'http://localhost/donate.php',
+        'notify_url'  => 'http://localhost/api/momo_notify.php',
     ],
     'zalopay' => [
         // Sandbox credentials (replace with your own)
@@ -35,8 +38,16 @@ return [
         // Bank account details to show for manual transfer
         'account_name' => 'Organization Name',
         'account_number' => '0123456789',
-        'bank_name' => 'Ngân hàng ABC',
-        'branch' => 'Chi nhánh XYZ',
-        'note' => 'Vui lòng ghi "Quyên góp" và mã giao dịch trong nội dung chuyển khoản.',
+        'bank_name' => 'NgÃ¢n hÃ ng ABC',
+        'branch' => 'Chi nhÃ¡nh XYZ',
+        'note' => 'Vui lÃ²ng ghi "QuyÃªn gÃ³p" vÃ  mÃ£ giao dá»‹ch trong ná»™i dung chuyá»ƒn khoáº£n.',
+    ],
+
+    'vnpay' => [
+        'tmn_code' => 'CGXZLS0Z',
+        'hash_secret' => 'XNBCJFAKAZQSGTARRLGCHVZWCIOIGSHN',
+        'endpoint' => 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
     ],
 ];
+
+

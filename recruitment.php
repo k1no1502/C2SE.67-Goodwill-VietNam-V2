@@ -1,7 +1,8 @@
-﻿<?php
+<?php
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 if (!isLoggedIn()) {
     header('Location: login.php?redirect=' . urlencode('recruitment.php'));
@@ -130,6 +131,8 @@ if (isset($_GET['submitted']) && $_GET['submitted'] === '1') {
     $success = 'Đã gửi đơn đăng ký. Chúng tôi sẽ liên hệ sớm.';
 }
 
+$isModerationError = false;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf = $_POST['csrf_token'] ?? '';
     if (!validateCSRFToken($csrf)) {
@@ -156,6 +159,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $cvFilename = $upload['filename'];
                 } else {
                     $error = 'CV không hợp lệ. Vui lòng chọn file PDF, DOC hoặc DOCX (tối đa 5MB).';
+                }
+            }
+        }
+
+        // === KIỂM DUYỆT NỘI DUNG ===
+        if ($error === '') {
+            $fieldsToModerate = [
+                'Họ và tên' => $fullName,
+                'Email' => $email,
+                'Giới thiệu' => $message
+            ];
+
+            foreach ($fieldsToModerate as $fieldName => $textValue) {
+                if (trim($textValue) === '') continue;
+
+                // 1. Local check
+                $localBanned = checkToxicTextLocal($textValue);
+                if ($localBanned) {
+                    $error = "Mục [$fieldName] chứa từ bị cấm: $localBanned";
+                    $isModerationError = true;
+                    break;
+                }
+
+                // 2. AI check
+                $aiCheck = checkToxicTextGemini($textValue);
+                if ($aiCheck['violate']) {
+                    $error = "Mục [$fieldName]: " . $aiCheck['reason'];
+                    $isModerationError = true;
+                    break;
                 }
             }
         }
@@ -569,9 +601,15 @@ include 'includes/header.php';
             </div>
 
             <?php if ($error): ?>
-                <div class="alert alert-danger mt-4" role="alert">
-                    <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
-                </div>
+                <?php if (!empty($isModerationError)): ?>
+                    <div class="mt-4">
+                        <?= renderModerationError('Đăng ký bị từ chối', $error) ?>
+                    </div>
+                <?php else: ?>
+                    <div class="alert alert-danger mt-4" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
             <?php if ($success): ?>
                 <div class="alert alert-success mt-4" role="alert">

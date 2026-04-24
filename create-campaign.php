@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 requireLogin();
 
@@ -53,20 +54,49 @@ function extractYoutubeVideoId($input) {
     return '';
 }
 
+// ============================================================
+// HÀM KIỂM DUYỆT NỘI DUNG (Content Moderation)
+// ============================================================
+
+
+
+// ============================================================
+// XỬ LÝ FORM
+// ============================================================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
     $description = sanitize($_POST['description'] ?? '');
     $start_date = $_POST['start_date'] ?? '';
     $end_date = $_POST['end_date'] ?? '';
+    $target_amount = isset($_POST['target_amount']) ? (float)$_POST['target_amount'] : 0;
     
     // Validate
     if (empty($name) || empty($description) || empty($start_date) || empty($end_date)) {
         $error = 'Vui lòng điền đầy đủ thông tin bắt buộc.';
+    } elseif ($target_amount < 0) {
+        $error = 'Số tiền cần thiết không được nhỏ hơn 0.';
     } elseif (strtotime($start_date) < time()) {
         $error = 'Ngày bắt đầu phải từ hôm nay trở đi.';
     } elseif (strtotime($end_date) <= strtotime($start_date)) {
         $error = 'Ngày kết thúc phải sau ngày bắt đầu.';
-    } else {
+    }
+
+    // === KIỂM DUYỆT NỘI DUNG ===
+    if (!$error) {
+        $allText = $name . ' ' . $description;
+        $toxicWord = checkToxicTextLocal($allText);
+        if ($toxicWord !== null) {
+            $error = 'Khởi tạo chiến dịch thất bại! Tên hoặc mô tả chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+        } else {
+            $geminiCheck = checkToxicTextGemini($allText);
+            if ($geminiCheck['violate']) {
+                $error = 'Khởi tạo chiến dịch thất bại! ' . htmlspecialchars($geminiCheck['reason']);
+            }
+        }
+    }
+
+    if (!$error) {
         try {
             Database::beginTransaction();
             
@@ -81,6 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uploadResult = uploadFile($_FILES['image'], $uploadDir);
                 if ($uploadResult['success']) {
                     $imagePath = $uploadResult['filename'];
+                    
+                    // === KIỂM DUYỆT ẢNH NSFW ===
+                    $fullImagePath = $uploadDir . $imagePath;
+                    if (file_exists($fullImagePath)) {
+                        $imgCheck = checkNsfwImageGemini($fullImagePath);
+                        if ($imgCheck['violate']) {
+                            @unlink($fullImagePath);
+                            throw new Exception('Khởi tạo chiến dịch thất bại! ' . $imgCheck['reason']);
+                        }
+                    }
                 }
             }
             
@@ -175,8 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Insert campaign with pending status for admin approval
             $sql = "INSERT INTO campaigns (name, description, image, video_type, video_file, video_youtube, video_facebook, video_tiktok,
-                    start_date, end_date, target_items, status, created_by, created_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
+                    start_date, end_date, target_amount, target_items, status, created_by, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, NOW())";
             Database::execute($sql, [
                 $name,
                 $description,
@@ -188,6 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tiktokLink,
                 $start_date,
                 $end_date,
+                $target_amount > 0 ? $target_amount : null,
                 $_SESSION['user_id']
             ]);
             
@@ -220,7 +261,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             Database::rollback();
             error_log("Create campaign error: " . $e->getMessage());
-            $error = 'Có lỗi xảy ra khi tạo chiến dịch. Vui lòng thử lại.';
+            // Hiển thị lỗi kiểm duyệt trực tiếp, lỗi khác thì thông báo chung
+            if (strpos($e->getMessage(), 'Khởi tạo chiến dịch thất bại') !== false || 
+                strpos($e->getMessage(), 'Vui lòng') !== false ||
+                strpos($e->getMessage(), 'Đường link') !== false ||
+                strpos($e->getMessage(), 'Lỗi upload') !== false) {
+                $error = $e->getMessage();
+            } else {
+                $error = 'Có lỗi xảy ra khi tạo chiến dịch. Vui lòng thử lại.';
+            }
         }
     }
 }
@@ -423,10 +472,17 @@ include 'includes/header.php';
                     <?php endif; ?>
 
                     <?php if ($error): ?>
+                        <?php
+                        $isModReject = (strpos($error, 'Khởi tạo chiến dịch thất bại') !== false);
+                        ?>
+                        <?php if ($isModReject): ?>
+                            <?= renderModerationError('Khởi tạo chiến dịch thất bại', str_replace('Khởi tạo chiến dịch thất bại! ', '', $error)) ?>
+                        <?php else: ?>
                         <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
                             <i class="bi bi-exclamation-triangle-fill fs-5"></i>
                             <span><?php echo htmlspecialchars($error); ?></span>
                         </div>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
@@ -552,6 +608,21 @@ include 'includes/header.php';
                         <!-- Campaign Details -->
                         <div class="mb-4">
                             <div class="cc-section-title"><i class="bi bi-calendar3 me-2"></i>Thời gian chiến dịch</div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="target_amount" class="form-label">Số tiền cần thiết (VND)</label>
+                                    <input type="number"
+                                           class="form-control"
+                                           id="target_amount"
+                                           name="target_amount"
+                                           value="<?php echo htmlspecialchars($_POST['target_amount'] ?? ''); ?>"
+                                           min="0"
+                                           step="1000"
+                                           placeholder="Ví dụ: 50000000">
+                                    <div class="form-text">Có thể để trống nếu chiến dịch chỉ tập trung vào vật phẩm.</div>
+                                </div>
+                            </div>
                             
                             <div class="row">
                                 <div class="col-md-6 mb-3">

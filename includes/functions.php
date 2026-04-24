@@ -94,7 +94,36 @@ function isAdmin() {
 function isStaff() {
     $roleName = strtolower(trim((string)($_SESSION['role'] ?? '')));
     $roleId = (int)($_SESSION['role_id'] ?? 0);
-    return $roleId === 4 || in_array($roleName, ['staff', 'nhan vien', 'tu van vien'], true);
+
+    if ($roleId === 4 || in_array($roleName, ['staff', 'nhan vien', 'tu van vien'], true)) {
+        return true;
+    }
+
+    // Fallback: infer staff capability from assigned display role.
+    if (!empty($_SESSION['user_id'])) {
+        try {
+            $displayRole = getUserDisplayRole((int)$_SESSION['user_id'], $roleId > 0 ? $roleId : null);
+            $normalized = mb_strtolower(trim((string)$displayRole), 'UTF-8');
+            return in_array($normalized, [
+                'quản lý kho hàng',
+                'quan ly kho hang',
+                'quản lý quyên góp',
+                'quan ly quyen gop',
+                'quản lý đơn hàng',
+                'quan ly don hang',
+                'quản lý chiến dịch',
+                'quan ly chien dich',
+                'thu ngân',
+                'thu ngan',
+                'tư vấn chăm sóc khách hàng',
+                'tu van cham soc khach hang'
+            ], true);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -102,7 +131,7 @@ function isStaff() {
  */
 function requireLogin() {
     if (!isLoggedIn()) {
-        header('Location: login.php');
+        header('Location: /login.php');
         exit();
     }
 
@@ -116,7 +145,48 @@ function requireLogin() {
         }
 
         session_destroy();
-        header('Location: login.php?message=account_locked');
+        header('Location: /login.php?message=account_locked');
+        exit();
+    }
+
+    enforceCashierPanelOnly();
+}
+
+/**
+ * Check if current logged-in account is cashier staff.
+ */
+function isCashierAccount($userId = null, $roleId = null) {
+    if (!isLoggedIn() || isAdmin()) {
+        return false;
+    }
+
+    $uid = $userId !== null ? (int)$userId : (int)($_SESSION['user_id'] ?? 0);
+    $rid = $roleId !== null ? (int)$roleId : (isset($_SESSION['role_id']) ? (int)$_SESSION['role_id'] : null);
+
+    return getStaffPanelKey($uid, $rid) === 'cashier';
+}
+
+/**
+ * Cashier accounts are restricted to cashier panel pages only.
+ */
+function enforceCashierPanelOnly() {
+    if (!isCashierAccount()) {
+        return;
+    }
+
+    $requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+    $path = '/' . ltrim((string)$requestPath, '/');
+
+    $allowedPaths = [
+        '/admin/cashier-panel.php',
+        '/admin/cashier-direct-sale.php',
+        '/staff-panel.php',
+        '/logout.php',
+        '/login.php',
+    ];
+
+    if (!in_array($path, $allowedPaths, true)) {
+        header('Location: /admin/cashier-panel.php');
         exit();
     }
 }
@@ -127,7 +197,7 @@ function requireLogin() {
 function requireAdmin() {
     requireLogin();
     if (!isAdmin()) {
-        header('Location: index.php');
+        header('Location: /index.php');
         exit();
     }
 }
@@ -138,7 +208,63 @@ function requireAdmin() {
 function requireStaffOrAdmin() {
     requireLogin();
     if (!(isAdmin() || isStaff())) {
-        header('Location: index.php');
+        header('Location: /index.php');
+        exit();
+    }
+}
+
+/**
+ * Resolve current staff panel key from approved/display role.
+ */
+function getStaffPanelKey($userId = null, $roleId = null) {
+    if (isAdmin()) {
+        return 'admin';
+    }
+
+    $userId = $userId !== null ? (int)$userId : (int)($_SESSION['user_id'] ?? 0);
+    $roleId = $roleId !== null ? (int)$roleId : (isset($_SESSION['role_id']) ? (int)$_SESSION['role_id'] : null);
+
+    $displayRole = getUserDisplayRole($userId, $roleId);
+    $normalized = mb_strtolower(trim((string)$displayRole), 'UTF-8');
+
+    $map = [
+        'quản lý kho hàng' => 'warehouse',
+        'quan ly kho hang' => 'warehouse',
+        'quản lý quyên góp' => 'warehouse',
+        'quan ly quyen gop' => 'warehouse',
+        'quản lý đơn hàng' => 'orders',
+        'quan ly don hang' => 'orders',
+        'quản lý chiến dịch' => 'campaigns',
+        'quan ly chien dich' => 'campaigns',
+        'thu ngân' => 'cashier',
+        'thu ngan' => 'cashier',
+        'tư vấn chăm sóc khách hàng' => 'support',
+        'tu van cham soc khach hang' => 'support'
+    ];
+
+    return $map[$normalized] ?? 'general';
+}
+
+/**
+ * Ensure staff only accesses pages allowed for their assigned panel.
+ */
+function enforceStaffPanelAccess(array $allowedPanelKeys) {
+    requireStaffOrAdmin();
+
+    if (isAdmin()) {
+        return;
+    }
+
+    $panelKey = getStaffPanelKey();
+
+    // Support advisors do not use admin/staff management panels.
+    if ($panelKey === 'support') {
+        header('Location: /index.php');
+        exit();
+    }
+
+    if (!in_array($panelKey, $allowedPanelKeys, true)) {
+        header('Location: /staff-panel.php');
         exit();
     }
 }
@@ -336,6 +462,56 @@ function getUserById($user_id) {
 }
 
 /**
+ * Get display role for profile (prefer approved recruitment position)
+ */
+function getUserDisplayRole($user_id, $role_id = null) {
+    try {
+        $staffPosition = Database::fetch(
+            "SELECT position FROM staff WHERE user_id = ? AND status = 'active' ORDER BY updated_at DESC, staff_id DESC LIMIT 1",
+            [$user_id]
+        );
+        $positionName = trim((string)($staffPosition['position'] ?? ''));
+        if ($positionName !== '') {
+            return $positionName;
+        }
+
+        $approvedPosition = Database::fetch(
+            "SELECT position FROM recruitment_applications
+             WHERE user_id = ? AND status = 'approved'
+             ORDER BY reviewed_at DESC, created_at DESC, application_id DESC
+             LIMIT 1",
+            [$user_id]
+        );
+        $positionName = trim((string)($approvedPosition['position'] ?? ''));
+        if ($positionName !== '') {
+            return $positionName;
+        }
+
+        if ($role_id !== null) {
+            $role = Database::fetch("SELECT role_name FROM roles WHERE role_id = ? LIMIT 1", [(int)$role_id]);
+            $roleName = strtolower(trim((string)($role['role_name'] ?? '')));
+            $roleMap = [
+                'admin' => 'Quản trị viên',
+                'administrator' => 'Quản trị viên',
+                'staff' => 'Nhân viên',
+                'user' => 'Người dùng',
+                'guest' => 'Khách'
+            ];
+            if (isset($roleMap[$roleName])) {
+                return $roleMap[$roleName];
+            }
+            if ($roleName !== '') {
+                return ucfirst($roleName);
+            }
+        }
+    } catch (Exception $e) {
+        error_log('Get display role error: ' . $e->getMessage());
+    }
+
+    return 'Người dùng';
+}
+
+/**
  * Get statistics
  */
 function getStatistics() {
@@ -525,11 +701,16 @@ function displayFlashMessages() {
     foreach ($types as $type) {
         $message = getFlashMessage($type);
         if ($message) {
-            $alertClass = 'alert-' . ($type === 'error' ? 'danger' : $type);
-            $html .= '<div class="alert ' . $alertClass . ' alert-dismissible fade show" role="alert">';
-            $html .= htmlspecialchars($message);
-            $html .= '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-            $html .= '</div>';
+            // Nếu là error và message đã là HTML alert block thì in thẳng ra
+            if ($type === 'error' && strpos($message, 'alert-heading') !== false && strpos($message, 'alert-danger') !== false) {
+                $html .= $message;
+            } else {
+                $alertClass = 'alert-' . ($type === 'error' ? 'danger' : $type);
+                $html .= '<div class="alert ' . $alertClass . ' alert-dismissible fade show" role="alert">';
+                $html .= htmlspecialchars($message);
+                $html .= '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                $html .= '</div>';
+            }
         }
     }
     
@@ -687,5 +868,36 @@ function getCategoryDescription($categoryId) {
     ];
     
     return $categoryDescriptions[$categoryId] ?? '';
+}
+
+/**
+ * Resolve donation/inventory image source.
+ * - If value is a full URL, return as-is.
+ * - If value already points to a public folder, keep that path.
+ * - Otherwise treat as filename in uploads/donations.
+ */
+function resolveDonationImageUrl(?string $imageValue, string $fallback = 'uploads/donations/placeholder-default.svg'): string {
+    $value = trim((string)$imageValue);
+    if ($value === '') {
+        return $fallback;
+    }
+
+    if (preg_match('/^(https?:\/\/|data:image\/)/i', $value) === 1) {
+        return $value;
+    }
+
+    if (strpos($value, 'picture_Database/') === 0) {
+        return $value;
+    }
+
+    if (strpos($value, 'uploads/donations/') === 0) {
+        return $value;
+    }
+
+    if (strpos($value, '/uploads/donations/') === 0 || strpos($value, '/picture_Database/') === 0) {
+        return ltrim($value, '/');
+    }
+
+    return 'uploads/donations/' . ltrim($value, '/');
 }
 ?>

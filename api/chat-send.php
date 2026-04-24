@@ -5,6 +5,27 @@ header('Content-Type: application/json');
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
+function ensureChatTypingSchema()
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+    $ensured = true;
+
+    Database::execute(
+        "CREATE TABLE IF NOT EXISTS chat_typing_status (
+            chat_id INT PRIMARY KEY,
+            user_typing TINYINT(1) NOT NULL DEFAULT 0,
+            staff_typing TINYINT(1) NOT NULL DEFAULT 0,
+            user_updated_at DATETIME NULL,
+            staff_updated_at DATETIME NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_chat_typing_chat FOREIGN KEY (chat_id) REFERENCES chat_sessions(chat_id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
 $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 $guestToken = session_id();
 $message = trim($_POST['message'] ?? '');
@@ -46,17 +67,15 @@ try {
         [$chat['chat_id'], $userId, $message]
     );
 
-    $autoReplies = [
-        'Cam on ban da lien he. Nhan vien se phan hoi som nhat co the.',
-        'Ban vui long cho biet them chi tiet de minh ho tro nhanh hon nhe.',
-        'Toi da ghi nhan. Xin doi trong giay lat nhe.'
-    ];
-    $reply = $autoReplies[array_rand($autoReplies)];
-
+    ensureChatTypingSchema();
     Database::execute(
-        "INSERT INTO chat_messages (chat_id, sender_type, sender_id, message, created_at)
-         VALUES (?, 'staff', ?, ?, NOW())",
-        [$chat['chat_id'], $chat['staff_id'], $reply]
+        "INSERT INTO chat_typing_status (chat_id, user_typing, user_updated_at, updated_at)
+         VALUES (?, 0, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+            user_typing = 0,
+            user_updated_at = NOW(),
+            updated_at = NOW()",
+        [$chat['chat_id']]
     );
 
     Database::execute(

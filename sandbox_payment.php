@@ -7,6 +7,17 @@ requireLogin();
 
 $method = strtolower(trim($_GET['method'] ?? ''));
 $transId = (int)($_GET['trans_id'] ?? 0);
+$returnTo = trim((string)($_GET['return_to'] ?? 'donate.php'));
+
+if ($returnTo === '' || preg_match('#^https?://#i', $returnTo)) {
+    $returnTo = 'donate.php';
+}
+
+function sandboxBuildReturnUrl(string $base, array $params): string
+{
+    $separator = strpos($base, '?') !== false ? '&' : '?';
+    return $base . $separator . http_build_query($params);
+}
 
 $allowed = ['momo', 'zalopay'];
 if (!in_array($method, $allowed, true) || $transId <= 0) {
@@ -27,12 +38,20 @@ $action = $_POST['action'] ?? '';
 if ($action === 'complete') {
     Database::execute('UPDATE transactions SET status = ?, payment_reference = ?, updated_at = NOW() WHERE trans_id = ?', ['completed', 'SIM-' . uniqid(), $transId]);
     logActivity($_SESSION['user_id'], 'donation_payment', "Completed {$method} donation transaction #$transId");
-    header('Location: donate.php?payment_success=1&method=' . urlencode($method));
+    header('Location: ' . sandboxBuildReturnUrl($returnTo, [
+        'payment_success' => 1,
+        'method' => $method,
+        'trans_id' => $transId,
+    ]));
     exit;
 } elseif ($action === 'cancel') {
     Database::execute('UPDATE transactions SET status = ?, updated_at = NOW() WHERE trans_id = ?', ['cancelled', $transId]);
     logActivity($_SESSION['user_id'], 'donation_payment', "Cancelled {$method} donation transaction #$transId");
-    header('Location: donate.php?payment_error=1&method=' . urlencode($method));
+    header('Location: ' . sandboxBuildReturnUrl($returnTo, [
+        'payment_error' => 1,
+        'method' => $method,
+        'trans_id' => $transId,
+    ]));
     exit;
 }
 
