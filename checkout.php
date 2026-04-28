@@ -832,22 +832,27 @@ include 'includes/header.php';
     }
     .form-control,
     .form-select {
-        min-height: 48px;
-        border-radius: 14px;
+        min-height: 52px;
+        border-radius: 16px;
         border: 1.5px solid var(--checkout-line);
-        background: #fbfeff;
+        background: #f4fbfc;
         color: var(--checkout-ink);
-        padding: .75rem .95rem;
+        padding: .75rem 1.1rem;
         box-shadow: none;
+        transition: all .2s ease;
     }
     textarea.form-control {
-        min-height: 110px;
+        min-height: 120px;
     }
     .form-control:focus,
     .form-select:focus {
         border-color: var(--checkout-brand-700);
-        box-shadow: 0 0 0 4px rgba(24,127,152,.12);
+        box-shadow: 0 0 0 4px rgba(24,127,152,.15);
         background: #fff;
+    }
+    .address-select {
+        background-color: #eff8fa;
+        font-weight: 500;
     }
     .form-text {
         color: var(--checkout-muted);
@@ -1269,40 +1274,43 @@ include 'includes/header.php';
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
+                        <div class="mb-4">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
                                     <label class="form-label">Thành phố *</label>
-                                    <select class="form-select" id="shipping_city" name="shipping_city" required data-selected="<?php echo htmlspecialchars($_POST['shipping_city'] ?? ''); ?>">
+                                    <select class="form-select address-select" id="shipping_city" name="shipping_city" required data-selected="<?php echo htmlspecialchars($_POST['shipping_city'] ?? ''); ?>">
                                         <option value="">-- Chọn Thành phố --</option>
                                     </select>
                                     <div class="invalid-feedback">Vui lòng chọn Thành phố</div>
                                 </div>
-                                <div class="col-md-4 mb-3">
+                                <div class="col-md-4">
                                     <label class="form-label">Quận/Huyện *</label>
-                                    <select class="form-select" id="shipping_district" name="shipping_district" required data-selected="<?php echo htmlspecialchars($_POST['shipping_district'] ?? ''); ?>" disabled>
+                                    <select class="form-select address-select" id="shipping_district" name="shipping_district" required data-selected="<?php echo htmlspecialchars($_POST['shipping_district'] ?? ''); ?>" disabled>
                                         <option value="">-- Chọn Quận/Huyện --</option>
                                     </select>
                                     <div class="invalid-feedback">Vui lòng chọn Quận/Huyện</div>
                                 </div>
-                                <div class="col-md-4 mb-3">
+                                <div class="col-md-4">
                                     <label class="form-label">Phường/Xã *</label>
-                                    <select class="form-select" id="shipping_ward" name="shipping_ward" required data-selected="<?php echo htmlspecialchars($_POST['shipping_ward'] ?? ''); ?>" disabled>
+                                    <select class="form-select address-select" id="shipping_ward" name="shipping_ward" required data-selected="<?php echo htmlspecialchars($_POST['shipping_ward'] ?? ''); ?>" disabled>
                                         <option value="">-- Chọn Phường/Xã --</option>
                                     </select>
                                     <div class="invalid-feedback">Vui lòng chọn Phường/Xã</div>
                                 </div>
                             </div>
-                            <label for="shipping_address" class="form-label">Địa chỉ giao hàng *</label>
-                            <textarea class="form-control" 
-                                      id="shipping_address" 
-                                      name="shipping_address" 
-                                      rows="3" 
-                                      placeholder="Nhập địa chỉ chi tiết (số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố)"
-                                      required><?php echo htmlspecialchars($shipping_address ?: $user['address']); ?></textarea>
-                            <div class="form-text">Nhập đầy đủ địa chỉ để hệ thống giao hàng chính xác.</div>
-                            <div class="invalid-feedback">
-                                Vui lòng nhập địa chỉ giao hàng.
+                            
+                            <div class="mb-3">
+                                <label for="shipping_address" class="form-label">Địa chỉ giao hàng *</label>
+                                <textarea class="form-control" 
+                                          id="shipping_address" 
+                                          name="shipping_address" 
+                                          rows="3" 
+                                          placeholder="Nhập địa chỉ chi tiết (số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố)"
+                                          required><?php echo htmlspecialchars($shipping_address ?: $user['address']); ?></textarea>
+                                <div class="form-text mt-2"><i class="bi bi-info-circle me-1"></i> Nhập đầy đủ địa chỉ để hệ thống giao hàng chính xác.</div>
+                                <div class="invalid-feedback">
+                                    Vui lòng nhập địa chỉ giao hàng.
+                                </div>
                             </div>
                         </div>
 
