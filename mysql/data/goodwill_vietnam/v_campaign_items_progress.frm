@@ -1,16 +1,0 @@
-TYPE=VIEW
-query=select `ci`.`item_id` AS `item_id`,`ci`.`campaign_id` AS `campaign_id`,`ci`.`item_name` AS `item_name`,`ci`.`category_id` AS `category_id`,`ci`.`quantity_needed` AS `quantity_needed`,`ci`.`quantity_received` AS `quantity_received`,`ci`.`unit` AS `unit`,`ci`.`description` AS `description`,`ci`.`created_at` AS `created_at`,`c`.`name` AS `campaign_name`,`c`.`status` AS `campaign_status`,`cat`.`name` AS `category_name`,`ci`.`quantity_received` AS `received`,`ci`.`quantity_needed` AS `needed`,`ci`.`quantity_needed` - `ci`.`quantity_received` AS `remaining`,case when `ci`.`quantity_needed` > 0 then round(`ci`.`quantity_received` / `ci`.`quantity_needed` * 100,2) else 0 end AS `progress_percentage`,case when `ci`.`quantity_received` >= `ci`.`quantity_needed` then \'Du\' when `ci`.`quantity_received` > 0 then \'Dang thieu\' else \'Chua co\' end AS `status_text` from ((`goodwill_vietnam`.`campaign_items` `ci` left join `goodwill_vietnam`.`campaigns` `c` on(`ci`.`campaign_id` = `c`.`campaign_id`)) left join `goodwill_vietnam`.`categories` `cat` on(`ci`.`category_id` = `cat`.`category_id`))
-md5=955f70642b1c7d7db308b1b841ab4ef7
-updatable=0
-algorithm=0
-definer_user=root
-definer_host=localhost
-suid=2
-with_check_option=0
-timestamp=0001775209628034706
-create-version=2
-source=SELECT \n    ci.*,\n    c.name AS campaign_name,\n    c.status AS campaign_status,\n    cat.name AS category_name,\n    ci.quantity_received AS received,\n    ci.quantity_needed AS needed,\n    (ci.quantity_needed - ci.quantity_received) AS remaining,\n    CASE \n        WHEN ci.quantity_needed > 0 \n        THEN ROUND((ci.quantity_received / ci.quantity_needed) * 100, 2)\n        ELSE 0 \n    END AS progress_percentage,\n    CASE \n        WHEN ci.quantity_received >= ci.quantity_needed THEN \'Du\'\n        WHEN ci.quantity_received > 0 THEN \'Dang thieu\'\n        ELSE \'Chua co\'\n    END AS status_text\nFROM campaign_items ci\nLEFT JOIN campaigns c ON ci.campaign_id = c.campaign_id\nLEFT JOIN categories cat ON ci.category_id = cat.category_id
-client_cs_name=utf8mb4
-connection_cl_name=utf8mb4_general_ci
-view_body_utf8=select `ci`.`item_id` AS `item_id`,`ci`.`campaign_id` AS `campaign_id`,`ci`.`item_name` AS `item_name`,`ci`.`category_id` AS `category_id`,`ci`.`quantity_needed` AS `quantity_needed`,`ci`.`quantity_received` AS `quantity_received`,`ci`.`unit` AS `unit`,`ci`.`description` AS `description`,`ci`.`created_at` AS `created_at`,`c`.`name` AS `campaign_name`,`c`.`status` AS `campaign_status`,`cat`.`name` AS `category_name`,`ci`.`quantity_received` AS `received`,`ci`.`quantity_needed` AS `needed`,`ci`.`quantity_needed` - `ci`.`quantity_received` AS `remaining`,case when `ci`.`quantity_needed` > 0 then round(`ci`.`quantity_received` / `ci`.`quantity_needed` * 100,2) else 0 end AS `progress_percentage`,case when `ci`.`quantity_received` >= `ci`.`quantity_needed` then \'Du\' when `ci`.`quantity_received` > 0 then \'Dang thieu\' else \'Chua co\' end AS `status_text` from ((`goodwill_vietnam`.`campaign_items` `ci` left join `goodwill_vietnam`.`campaigns` `c` on(`ci`.`campaign_id` = `c`.`campaign_id`)) left join `goodwill_vietnam`.`categories` `cat` on(`ci`.`category_id` = `cat`.`category_id`))
-mariadb-version=100432

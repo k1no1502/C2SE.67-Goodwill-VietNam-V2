@@ -453,6 +453,30 @@ include 'includes/header.php';
                         <li>Video YouTube giúp tăng độ tin cậy</li>
                     </ul>
                 </div>
+
+                <div class="sidebar-box border-danger bg-danger bg-opacity-10 mt-4 shadow-sm">
+                    <h6 class="fw-bold text-danger mb-3 d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>Quy định chiến dịch
+                    </h6>
+                    <ul class="list-unstyled mb-0 small text-dark" style="line-height: 1.6;">
+                        <li class="mb-3 d-flex align-items-start">
+                            <i class="bi bi-x-octagon-fill text-danger me-2 mt-1"></i>
+                            <span>Tuyệt đối <strong>không sử dụng từ ngữ thô tục</strong>, gây kích động hoặc vi phạm chuẩn mực đạo đức cộng đồng.</span>
+                        </li>
+                        <li class="mb-3 d-flex align-items-start">
+                            <i class="bi bi-ban text-danger me-2 mt-1"></i>
+                            <span><strong>Cấm sử dụng hình ảnh/video không phù hợp</strong>, bạo lực, hoặc không liên quan đến mục đích thiện nguyện.</span>
+                        </li>
+                        <li class="mb-3 d-flex align-items-start">
+                            <i class="bi bi-shield-check text-success me-2 mt-1"></i>
+                            <span>Mọi chiến dịch phải thông qua <strong>quy trình kiểm duyệt nghiêm ngặt</strong> của Ban Quản Trị.</span>
+                        </li>
+                        <li class="d-flex align-items-start">
+                            <i class="bi bi-robot text-primary me-2 mt-1"></i>
+                            <span>Nội dung được <strong>AI giám sát tự động</strong>. Bất kỳ sự gian lận nào sẽ dẫn đến từ chối và khóa tài khoản vĩnh viễn.</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Main Form -->

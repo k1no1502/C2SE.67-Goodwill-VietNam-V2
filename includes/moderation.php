@@ -408,6 +408,19 @@ function checkNsfwImageGemini(string $imagePath): array {
  * Render HTML thông báo kiểm duyệt thất bại (styled giống donate.php)
  */
 function renderModerationError(string $title, string $message): string {
+    // Ghi log ra file cho app Python (web.py) đọc và hiển thị luồng
+    $logFile = $_SERVER['DOCUMENT_ROOT'] . '/AI_PROCESS/ai_queue.json';
+    $logDir = dirname($logFile);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0777, true);
+    }
+    $logData = [
+        'timestamp' => time(),
+        'title' => $title,
+        'message' => $message
+    ];
+    @file_put_contents($logFile, json_encode($logData) . "\n", FILE_APPEND);
+
     $escapedTitle = htmlspecialchars($title);
     $escapedMsg = htmlspecialchars($message);
     return <<<HTML

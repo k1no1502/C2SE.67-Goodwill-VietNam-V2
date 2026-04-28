@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
@@ -118,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
         $cart          = json_decode((string)($_POST['cart_json'] ?? '[]'), true);
         $paymentMethod = (string)($_POST['payment_method'] ?? 'cash');
         $customerName  = trim((string)($_POST['customer_name'] ?? ''));
+        $cashReceived  = (float)str_replace('.', '', (string)($_POST['cash_received'] ?? '0'));
 
         if (!is_array($cart) || empty($cart)) {
             $error = 'Vui lòng chọn ít nhất 1 sản phẩm.';
@@ -389,6 +390,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                     'payment_method' => $paymentMethod,
                     'items'          => $lines,
                     'total_amount'   => $totalAmount,
+                    'cash_received'  => $cashReceived,
+                    'change_amount'  => max(0, $cashReceived - $totalAmount),
                 ];
             } catch (Exception $e) {
                 Database::rollback();
@@ -1479,7 +1482,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                                         <i class="bi bi-wallet2"></i>
                                         <span>MoMo</span>
                                     </button>
-                                    
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cash Payment Details -->
+                        <div class="sb-card" id="cashDetailsCard">
+                            <div class="sb-card-head">
+                                <i class="bi bi-calculator" style="color:var(--teal);font-size:.95rem;"></i>
+                                <h6>Chi tiết thanh toán tiền mặt</h6>
+                            </div>
+                            <div class="sb-customer-body">
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold text-muted mb-1">Tiền khách đưa (VNĐ)</label>
+                                    <input type="text" id="cashReceived" 
+                                           placeholder="Nhập số tiền..." 
+                                           class="form-control fw-bold text-teal"
+                                           style="font-size: 1.1rem; border-color: #0b728c;">
+                                </div>
+                                <div class="total-row" style="border-top: 1px dashed var(--border); padding-top: 0.5rem; margin-top: 0.5rem;">
+                                    <span class="lbl fw-bold">Tiền thối lại:</span>
+                                    <span class="val fw-bold text-danger" id="changeAmount" style="font-size: 1.1rem;">0đ</span>
                                 </div>
                             </div>
                         </div>
@@ -1502,8 +1525,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                             </div>
                             <div class="sb-checkout-body">
                                 <button class="btn-checkout" id="checkoutBtn" type="button" disabled>
-                                    <i class="bi bi-receipt-cutoff"></i>
-                                    Thanh toán &amp; Xuất bill
+                                    <i class="bi bi-printer-fill"></i>
+                                    Xác nhận &amp; Xuất bill
                                 </button>
                             </div>
                         </div>
@@ -1522,6 +1545,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
     <input type="hidden" name="cart_json"       id="cartJson"           value="[]">
     <input type="hidden" name="payment_method"  id="paymentInput"       value="cash">
     <input type="hidden" name="customer_name"   id="customerNameHidden" value="">
+    <input type="hidden" name="cash_received"   id="cashReceivedHidden" value="0">
 </form>
 
 <?php if ($receipt): ?>
@@ -1566,6 +1590,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
                 <span>Tổng cộng</span>
                 <span><?php echo number_format((float)$receipt['total_amount'], 0, ',', '.'); ?>đ</span>
             </div>
+            
+            <?php if ($receipt['payment_method'] === 'cash' && ($receipt['cash_received'] ?? 0) > 0): ?>
+                <div class="r-meta-row mt-2" style="font-size: 0.9rem;">
+                    <span>Khách đưa</span>
+                    <strong><?php echo number_format((float)$receipt['cash_received'], 0, ',', '.'); ?>đ</strong>
+                </div>
+                <div class="r-meta-row" style="font-size: 0.9rem;">
+                    <span>Thối lại</span>
+                    <strong class="text-danger"><?php echo number_format((float)$receipt['change_amount'], 0, ',', '.'); ?>đ</strong>
+                </div>
+            <?php endif; ?>
         </div>
         <div class="receipt-actions">
             <button class="btn-bill-print" onclick="window.print()">
@@ -1601,6 +1636,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
     const paymentInput    = document.getElementById('paymentInput');
     const customerInput   = document.getElementById('customerName');
     const customerHidden  = document.getElementById('customerNameHidden');
+    const cashDetailsCard = document.getElementById('cashDetailsCard');
+    const cashReceivedInput = document.getElementById('cashReceived');
+    const changeAmountEl  = document.getElementById('changeAmount');
     const searchInput     = document.getElementById('searchInput');
     const productCountEl  = document.getElementById('productCount');
     const scanStatusEl    = document.getElementById('scanStatus');
@@ -1619,6 +1657,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
     let scanning = false;
     let lastScanText = '';
     let lastScanAt = 0;
+    let currentTotal = 0;
     const scanCooldownMs = 220;
     const lastCameraKey = 'gwv_cashier_last_camera_id';
 
@@ -1773,6 +1812,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
 
         subtotalAmtEl.textContent = fmt(total);
         totalAmountEl.textContent = fmt(total);
+        currentTotal = total;
+        updateChangeCalculation();
+        
         cartCountEl.textContent   = count + ' món';
         checkoutBtn.disabled      = cart.size === 0;
         cartJsonInput.value       = JSON.stringify(
@@ -2058,7 +2100,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
             btn.classList.add('active');
             selectedPayment    = btn.dataset.method;
             paymentInput.value = selectedPayment;
+            
+            // Show/hide cash details
+            if (selectedPayment === 'cash') {
+                cashDetailsCard.style.display = 'block';
+            } else {
+                cashDetailsCard.style.display = 'none';
+            }
         });
+    });
+
+    /* ── Cash Received & Change Calculation ── */
+    function updateChangeCalculation() {
+        if (selectedPayment !== 'cash') return;
+        
+        const rawValue = cashReceivedInput.value.replace(/\D/g, '');
+        const received = parseInt(rawValue) || 0;
+        
+        if (received > 0) {
+            const change = received - currentTotal;
+            changeAmountEl.textContent = fmt(Math.max(0, change));
+            if (change < 0 && received > 0) {
+                changeAmountEl.classList.add('text-muted');
+                changeAmountEl.classList.remove('text-danger');
+            } else {
+                changeAmountEl.classList.remove('text-muted');
+                changeAmountEl.classList.add('text-danger');
+            }
+        } else {
+            changeAmountEl.textContent = '0đ';
+        }
+    }
+
+    cashReceivedInput.addEventListener('input', (e) => {
+        // Format as currency while typing
+        let val = e.target.value.replace(/\D/g, '');
+        if (val) {
+            e.target.value = new Intl.NumberFormat('vi-VN').format(parseInt(val));
+        }
+        updateChangeCalculation();
     });
 
     /* ── Checkout ── */
@@ -2071,6 +2151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cart_json'])) {
             }
             customerHidden.value = customerInput.value.trim();
             paymentInput.value   = selectedPayment;
+            document.getElementById('cashReceivedHidden').value = cashReceivedInput.value.replace(/\D/g, '');
             document.getElementById('checkoutForm').submit();
         });
     });

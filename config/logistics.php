@@ -7,8 +7,8 @@ return [
         'district' => 'Sơn Trà',
         'place_id' => null,
         // Fixed coordinates (absolute). Prefer setting via Google picker in admin/warehouse-location.php
-        'lat' => 16.047079,
-        'lng' => 108.206230,
+        'lat' => 16.0886,
+        'lng' => 108.2416,
     ],
     'relay_network' => [
         'northbound' => [

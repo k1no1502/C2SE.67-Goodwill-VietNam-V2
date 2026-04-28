@@ -412,11 +412,42 @@
                 opacity: 1;
             }
         }
-        .chat-widget-input {
-            border-top: 1px solid #e5e7eb;
+        .chat-widget-suggestions {
+            padding: 10px 12px 8px 12px;
+            background: #fff;
             display: flex;
             gap: 8px;
-            padding: 10px 12px;
+            overflow-x: auto;
+            white-space: nowrap;
+            border-top: 1px solid #e5e7eb;
+        }
+        .chat-widget-suggestions::-webkit-scrollbar {
+            height: 4px;
+        }
+        .chat-widget-suggestions::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 4px;
+        }
+        .chat-suggestion-chip {
+            background: #f0f9fb;
+            border: 1px solid #b6dfe9;
+            color: #0e7490;
+            border-radius: 16px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .chat-suggestion-chip:hover {
+            background: #0e7490;
+            color: #fff;
+        }
+        .chat-widget-input {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px 12px;
             background: #fff;
         }
         .chat-widget-input input {
@@ -498,6 +529,12 @@
             </div>
         </div>
         <div class="chat-widget-body" id="chatWidgetMessages"></div>
+        <div class="chat-widget-suggestions" id="chatWidgetSuggestions">
+            <button class="chat-suggestion-chip" type="button" data-msg="Chào bạn">Chào bạn 👋</button>
+            <button class="chat-suggestion-chip" type="button" data-msg="GoodWill là gì ? Hãy tóm tắt mục đích của dự án này">GoodWill là gì? Mục đích dự án</button>
+            <button class="chat-suggestion-chip" type="button" data-msg="Hướng dẫn mình cách quyên góp vật phẩm nhé!">Hướng dẫn quyên góp</button>
+            <button class="chat-suggestion-chip" type="button" data-msg="Làm thế nào để tạo chiến dịch kêu gọi quyên góp mới?">Tạo chiến dịch mới</button>
+        </div>
         <div class="chat-widget-input">
             <input type="text" placeholder="Nhap tin nhan..." aria-label="Nhap tin nhan" id="chatWidgetInput" disabled>
             <button type="button" id="chatWidgetSend" disabled>Gui</button>
@@ -1239,6 +1276,14 @@
                     event.preventDefault();
                     sendMessage();
                 }
+            });
+
+            document.querySelectorAll('.chat-suggestion-chip').forEach(function(chip) {
+                chip.addEventListener('click', function() {
+                    if (input.disabled) return;
+                    input.value = this.getAttribute('data-msg') || this.innerText;
+                    sendMessage();
+                });
             });
 
             input.addEventListener('input', function () {

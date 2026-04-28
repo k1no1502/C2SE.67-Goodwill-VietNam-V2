@@ -1,4 +1,4 @@
-﻿-- Database.sql
+-- Database.sql
 -- Consolidated database schema, migrations, and seed data for Goodwill Vietnam
 -- This file combines: Final_DB.sql, all migrations, and sample data imports
 -- Generated: 2026-03-06
@@ -13,6 +13,11 @@ USE goodwill_vietnam;
 
 -- Reset existing objects
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS ai_training_data;
+DROP TABLE IF EXISTS content_moderation_results;
+DROP TABLE IF EXISTS user_content_reports;
+DROP TABLE IF EXISTS ai_model_versions;
+DROP TABLE IF EXISTS ai_moderation_keywords;
 DROP TABLE IF EXISTS ratings;   
 DROP TABLE IF EXISTS order_tracking_events;
 DROP TABLE IF EXISTS order_status_history;
@@ -1073,7 +1078,6 @@ WHERE images IS NULL
 -- ============================================================================
 
 -- Kết quả kiểm duyệt nội dung tự động (ảnh + văn bản)
-DROP TABLE IF EXISTS content_moderation_results;
 CREATE TABLE content_moderation_results (
     result_id       INT PRIMARY KEY AUTO_INCREMENT,
     -- Tham chiếu nguồn nội dung
@@ -1106,7 +1110,6 @@ CREATE TABLE content_moderation_results (
 COMMENT='Lưu kết quả kiểm duyệt nội dung tự động (hình ảnh + văn bản 18+)';
 
 -- Dữ liệu huấn luyện AI có nhãn (labeled dataset)
-DROP TABLE IF EXISTS ai_training_data;
 CREATE TABLE ai_training_data (
     sample_id       INT PRIMARY KEY AUTO_INCREMENT,
     data_type       ENUM('image', 'text') NOT NULL,
@@ -1144,7 +1147,6 @@ CREATE TABLE ai_training_data (
 COMMENT='Dataset có nhãn để huấn luyện mô hình kiểm duyệt nội dung';
 
 -- Từ/cụm từ bị cấm (blacklist cho lọc văn bản 18+)
-DROP TABLE IF EXISTS ai_moderation_keywords;
 CREATE TABLE ai_moderation_keywords (
     keyword_id      INT PRIMARY KEY AUTO_INCREMENT,
     keyword         VARCHAR(255) NOT NULL,
@@ -1167,7 +1169,6 @@ CREATE TABLE ai_moderation_keywords (
 COMMENT='Danh sách từ/cụm từ cấm dùng để lọc văn bản thô tục';
 
 -- Báo cáo nội dung vi phạm từ người dùng
-DROP TABLE IF EXISTS user_content_reports;
 CREATE TABLE user_content_reports (
     report_id       INT PRIMARY KEY AUTO_INCREMENT,
     reporter_id     INT NOT NULL               COMMENT 'Người báo cáo',
@@ -1191,7 +1192,6 @@ CREATE TABLE user_content_reports (
 COMMENT='Báo cáo nội dung vi phạm do người dùng gửi';
 
 -- Phiên bản và số liệu các mô hình AI đã triển khai
-DROP TABLE IF EXISTS ai_model_versions;
 CREATE TABLE ai_model_versions (
     version_id      INT PRIMARY KEY AUTO_INCREMENT,
     model_name      VARCHAR(100) NOT NULL,
@@ -1227,43 +1227,43 @@ COMMENT='Lịch sử và số liệu các phiên bản mô hình AI kiểm duy�
 
 -- donations: đánh dấu ảnh quyên góp bị cờ vi phạm
 ALTER TABLE donations
-    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending'
+    ADD COLUMN moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending'
         COMMENT 'Trạng thái kiểm duyệt ảnh/mô tả quyên góp',
-    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL
+    ADD COLUMN moderation_score   DECIMAL(5,4) NULL
         COMMENT 'Điểm NSFW (0.0 = an toàn, 1.0 = vi phạm nặng)',
-    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL
+    ADD COLUMN moderation_at      TIMESTAMP NULL
         COMMENT 'Thời điểm kiểm duyệt gần nhất';
 
 -- inventory: đánh dấu ảnh sản phẩm bị cờ vi phạm
 ALTER TABLE inventory
-    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
-    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL,
-    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL;
+    ADD COLUMN moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
+    ADD COLUMN moderation_score   DECIMAL(5,4) NULL,
+    ADD COLUMN moderation_at      TIMESTAMP NULL;
 
 -- chat_messages: lọc ngôn ngữ thô tục trong chat
 ALTER TABLE chat_messages
-    ADD COLUMN IF NOT EXISTS is_flagged         BOOLEAN NOT NULL DEFAULT FALSE
+    ADD COLUMN is_flagged         BOOLEAN NOT NULL DEFAULT FALSE
         COMMENT 'TRUE = tin nhắn bị AI đánh dấu vi phạm',
-    ADD COLUMN IF NOT EXISTS flag_reason        VARCHAR(255) NULL
+    ADD COLUMN flag_reason        VARCHAR(255) NULL
         COMMENT 'Lý do bị cờ (từ khóa / nhãn AI)',
-    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'removed') DEFAULT 'pending',
-    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL;
+    ADD COLUMN moderation_status  ENUM('pending', 'clean', 'flagged', 'removed') DEFAULT 'pending',
+    ADD COLUMN moderation_score   DECIMAL(5,4) NULL;
 
 -- feedback: lọc nội dung phản hồi vi phạm
 ALTER TABLE feedback
-    ADD COLUMN IF NOT EXISTS moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
-    ADD COLUMN IF NOT EXISTS moderation_score   DECIMAL(5,4) NULL,
-    ADD COLUMN IF NOT EXISTS moderation_at      TIMESTAMP NULL;
+    ADD COLUMN moderation_status  ENUM('pending', 'clean', 'flagged', 'rejected') DEFAULT 'pending',
+    ADD COLUMN moderation_score   DECIMAL(5,4) NULL,
+    ADD COLUMN moderation_at      TIMESTAMP NULL;
 
 -- ============================================================================
 -- INDEX CHO CÁC CỘT KIỂM DUYỆT MỚI
 -- ============================================================================
 
-CREATE INDEX IF NOT EXISTS idx_donations_mod_status  ON donations   (moderation_status);
-CREATE INDEX IF NOT EXISTS idx_inventory_mod_status  ON inventory   (moderation_status);
-CREATE INDEX IF NOT EXISTS idx_chat_flagged          ON chat_messages (is_flagged);
-CREATE INDEX IF NOT EXISTS idx_chat_mod_status       ON chat_messages (moderation_status);
-CREATE INDEX IF NOT EXISTS idx_feedback_mod_status   ON feedback    (moderation_status);
+CREATE INDEX idx_donations_mod_status  ON donations   (moderation_status);
+CREATE INDEX idx_inventory_mod_status  ON inventory   (moderation_status);
+CREATE INDEX idx_chat_flagged          ON chat_messages (is_flagged);
+CREATE INDEX idx_chat_mod_status       ON chat_messages (moderation_status);
+CREATE INDEX idx_feedback_mod_status   ON feedback    (moderation_status);
 
 -- ============================================================================
 -- SEED DỮ LIỆU: Một số từ tiêu cực tiêu biểu (có thể mở rộng)

@@ -1,7 +1,14 @@
 <?php
 require_once __DIR__ . '/_auth.php';
 
-$user = api_require_user();
+$user = null;
+if (isLoggedIn()) {
+    $user = Database::fetch(
+        "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ? AND u.status = 'active'",
+        [$_SESSION['user_id']]
+    );
+}
+
 $roleName = strtolower(trim((string)($user['role_name'] ?? '')));
 $roleId = (int)($user['role_id'] ?? 0);
 $isAdmin = $roleId === 1 || in_array($roleName, ['admin', 'administrator', 'quan tri vien', 'quan tri'], true);
@@ -41,6 +48,20 @@ function geocodeAddressCached(string $address): ?array
         $decoded = json_decode((string)$raw, true);
         if (is_array($decoded)) {
             $cache = $decoded;
+        }
+    }
+
+    // High-precision local dictionary for common locations (Shop & Test addresses)
+    $localDict = [
+        '328 ngo quyen' => ['lat' => 16.0886, 'lng' => 108.2416],
+        '55 dinh cong tru' => ['lat' => 16.0963, 'lng' => 108.2486],
+        'man thai' => ['lat' => 16.0886, 'lng' => 108.2416],
+        'tho quang' => ['lat' => 16.1011, 'lng' => 108.2492],
+    ];
+
+    foreach ($localDict as $term => $coords) {
+        if (str_contains($norm, $term)) {
+            return $coords;
         }
     }
 
@@ -201,7 +222,10 @@ function fallbackCoordsForAddress(string $address): array
 {
     $a = strtolower($address);
     $fallbacks = [
-        'da nang' => ['lat' => 16.047079, 'lng' => 108.206230],
+        'da nang' => ['lat' => 16.0886, 'lng' => 108.2416],
+        'ngo quyen' => ['lat' => 16.0886, 'lng' => 108.2416],
+        'dinh cong tru' => ['lat' => 16.0963, 'lng' => 108.2486],
+        'tho quang' => ['lat' => 16.0963, 'lng' => 108.2486],
         'ha noi' => ['lat' => 21.028511, 'lng' => 105.804817],
         'ho chi minh' => ['lat' => 10.776889, 'lng' => 106.700806],
         'tp hcm' => ['lat' => 10.776889, 'lng' => 106.700806],
@@ -214,7 +238,7 @@ function fallbackCoordsForAddress(string $address): array
         }
     }
 
-    return ['lat' => 16.0, 'lng' => 107.5];
+    return ['lat' => 16.0886, 'lng' => 108.2416];
 }
 
 function interpolatePoint(array $start, array $end, float $ratio, float $offsetScale = 0.0): array
@@ -861,18 +885,21 @@ function buildSyntheticTrackingEvents(
 
     $hubOnlyEvents = array_slice($events, 1, count($hubEvents));
 
-    return match ($trackingStatus) {
-        'out_for_delivery', 'delivered' => [$lastHubEvent, $destinationEvent],
-        'in_transit' => array_merge(
-            [$warehouseEvent],
-            array_slice($hubOnlyEvents, 0, min(count($hubOnlyEvents), max(1, $reachedHubCount + 1)))
-        ),
-        'picked_up' => !empty($hubEvents)
-            ? [$warehouseEvent, $events[1]]
-            : [$warehouseEvent, $destinationEvent],
-        'waiting_pickup', 'created' => [$warehouseEvent],
-        default => [$warehouseEvent, $destinationEvent],
-    };
+    $synthetic = [$warehouseEvent];
+    
+    if ($trackingStatus === 'waiting_pickup' || $trackingStatus === 'created') {
+        return $synthetic;
+    }
+
+    // Luôn thêm điểm Hub cuối hoặc Warehouse nếu không có hub
+    $lastHub = !empty($hubEvents) ? $events[count($events) - 2] : $warehouseEvent;
+    if ($lastHub !== $warehouseEvent) {
+        $synthetic[] = $lastHub;
+    }
+    
+    $synthetic[] = $destinationEvent;
+    
+    return $synthetic;
 }
 
 try {
@@ -887,12 +914,20 @@ try {
     $orderSql = $hasShippingGeo
         ? "SELECT order_id, user_id, status, shipping_last_mile_status, created_at, shipping_address, shipping_lat, shipping_lng, shipping_place_id FROM orders WHERE order_id = ?"
         : "SELECT order_id, user_id, status, shipping_last_mile_status, created_at, shipping_address FROM orders WHERE order_id = ?";
-    if (!$isAdmin) {
+    if (!$isAdmin && $user) {
         $orderSql .= " AND user_id = ?";
         $orderParams[] = (int)$user['user_id'];
     }
 
     $order = Database::fetch($orderSql, $orderParams);
+    
+    // Nếu không tìm thấy đơn hàng thuộc về user hoặc không có user, thử tìm công khai
+    if (!$order) {
+        $publicSql = $hasShippingGeo
+            ? "SELECT order_id, status, shipping_last_mile_status, created_at, shipping_address, shipping_lat, shipping_lng, shipping_place_id FROM orders WHERE order_id = ?"
+            : "SELECT order_id, status, shipping_last_mile_status, created_at, shipping_address FROM orders WHERE order_id = ?";
+        $order = Database::fetch($publicSql, [$orderId]);
+    }
     if (!$order) {
         api_json(false, ['message' => 'Order not found.'], 404);
     }
@@ -900,10 +935,10 @@ try {
     $logisticsConfigPath = __DIR__ . '/../config/logistics.php';
     $logisticsConfig = file_exists($logisticsConfigPath) ? require $logisticsConfigPath : [];
     $warehouse = $logisticsConfig['warehouse'] ?? [
-        'name' => 'Warehouse',
-        'address' => '328 Ngo Quyen, Man Thai, Son Tra, Da Nang, Vietnam',
-        'lat' => null,
-        'lng' => null,
+        'name' => 'Cửa hàng & Kho Goodwill Việt Nam',
+        'address' => '328 Ngô Quyền, Mân Thái, Quận Sơn Trà, Đà Nẵng, Việt Nam',
+        'lat' => 16.0886,
+        'lng' => 108.2416,
     ];
 
     $warehouseLat = $warehouse['lat'] ?? null;

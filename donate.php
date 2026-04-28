@@ -1240,13 +1240,29 @@ include 'includes/header.php';
                         <li>Bạn có thể nhập danh sách bằng Excel/CSV.</li>
                     </ul>
                     <hr>
-                    <h6 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>Quy định khi quyên góp</h6>
-                    <ul class="small mb-0 ps-3 text-muted">
-                        <li class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i>Không sử dụng từ ngữ thô tục, phản cảm hoặc nội dung 18+.</li>
-                        <li class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i>Không upload hình ảnh bậy bạ, nhạy cảm hoặc không phù hợp.</li>
-                        <li class="mb-1"><i class="bi bi-geo-alt text-warning me-1"></i>Thông tin địa chỉ nhận hàng phải chính xác, đầy đủ.</li>
-                        <li><i class="bi bi-shield-check text-success me-1"></i>Nội dung được kiểm duyệt tự động bởi AI.</li>
-                    </ul>
+                    <div class="alert alert-danger border-0 bg-opacity-10 bg-danger mt-4 rounded-4 shadow-sm">
+                        <h6 class="fw-bold text-danger mb-3 d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>Quy định nghiêm ngặt
+                        </h6>
+                        <ul class="list-unstyled mb-0 small text-dark">
+                            <li class="mb-2 d-flex align-items-start">
+                                <i class="bi bi-x-octagon-fill text-danger me-2 mt-1"></i>
+                                <span>Tuyệt đối <strong>không sử dụng từ ngữ thô tục</strong>, sỉ nhục, hoặc có nội dung 18+.</span>
+                            </li>
+                            <li class="mb-2 d-flex align-items-start">
+                                <i class="bi bi-ban text-danger me-2 mt-1"></i>
+                                <span><strong>Cấm sử dụng hình ảnh không phù hợp</strong>, bậy bạ, hoặc nhạy cảm.</span>
+                            </li>
+                            <li class="mb-2 d-flex align-items-start">
+                                <i class="bi bi-geo-alt-fill text-warning me-2 mt-1"></i>
+                                <span>Thông tin địa chỉ lấy hàng phải chính xác và đầy đủ.</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="bi bi-robot text-primary me-2 mt-1"></i>
+                                <span>Nội dung được <strong>AI kiểm duyệt tự động 100%</strong>. Các vi phạm sẽ bị hệ thống từ chối ngay lập tức.</span>
+                            </li>
+                        </ul>
+                    </div>
                 </aside>
             </div>
 
