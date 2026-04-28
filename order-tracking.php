@@ -1,9 +1,9 @@
-﻿<?php
+<?php
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
 
-requireLogin();
+// requireLogin(); // Tạm thời comment để khách dễ dàng test tracking public theo ID
 
 	$isAdmin = isAdmin();
 
@@ -731,6 +731,25 @@ include 'includes/header.php';
     background: #fd7e14;
 }
 
+.gw-marker-blob {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    border: 3px solid #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    font-size: 18px;
+}
+.gw-marker-blob--warehouse {
+    background: linear-gradient(135deg, #0d6efd, #001f3f);
+}
+.gw-marker-blob--home {
+    background: linear-gradient(135deg, #198754, #0b4a2d);
+}
+
 .order-summary-header {
     background: linear-gradient(110deg, #0f766e, #14b8a6);
     border-bottom: 0;
@@ -957,21 +976,19 @@ include 'includes/header.php';
     function isShippingMode() {
         const s = safeText(currentStatus).toLowerCase();
         if (!s) return false;
-        if (useLogistics) {
-            return ['created', 'waiting_pickup', 'picked_up', 'in_transit', 'out_for_delivery'].includes(s);
-        }
-        return s === 'shipping';
+        const shippingStates = ['shipping', 'in_transit', 'out_for_delivery', 'picked_up', 'created', 'waiting_pickup'];
+        return shippingStates.includes(s);
     }
 
     function legLabelForStatus(status) {
         const s = safeText(status).toLowerCase();
-        if (s === 'in_transit') return 'Xe tải đang chạy giữa các kho trung chuyển';
-        if (s === 'out_for_delivery') return 'Xe máy đang giao từ kho khu vực đến nhà khách';
-        if (s === 'picked_up') return 'Đơn hàng vừa rời kho chính bằng xe tải';
-        if (s === 'waiting_pickup' || s === 'created') return 'Đơn hàng đang ở kho chính và chờ xuất kho';
-        if (s === 'delivered') return 'Đơn hàng đã giao thành công';
-        if (s === 'cancelled') return 'Đơn hàng đã bị hủy';
-        return 'Đang cập nhật trạng thái vận chuyển';
+        if (s === 'in_transit') return 'Xe vận tải đang di chuyển qua các tuyến đường chính';
+        if (s === 'out_for_delivery') return 'Shipper đang trên đường giao hàng tới địa chỉ của bạn';
+        if (s === 'picked_up') return 'Đơn hàng đã rời kho và đang bắt đầu hành trình';
+        if (s === 'waiting_pickup' || s === 'created') return 'Đơn hàng đang chờ nhân viên lấy hàng tại kho';
+        if (s === 'delivered') return 'Đơn hàng đã được giao tận tay khách hàng';
+        if (s === 'cancelled') return 'Đơn hàng đã dừng hành trình do bị hủy';
+        return 'Đang cập nhật lộ trình di chuyển...';
     }
 
     function updateTrackingSummary(payload) {
@@ -1279,13 +1296,13 @@ include 'includes/header.php';
         }
 
         const points = [];
-        events.forEach((ev) => {
-            const hasCoord = typeof ev.lat === 'number' && !Number.isNaN(ev.lat) && typeof ev.lng === 'number' && !Number.isNaN(ev.lng);
-            if (!hasCoord) return;
+        events.forEach(ev => {
+            if (!ev || ev.lat == null || ev.lng == null) return;
 
             const latlng = [ev.lat, ev.lng];
             points.push(latlng);
 
+            const type = safeText(ev.type || '').toLowerCase();
             const title = safeText(ev.title) || 'Cập nhật';
             const addr = safeText(ev.location_address);
             const time = safeText(ev.occurred_at);
@@ -1300,13 +1317,32 @@ include 'includes/header.php';
                 </div>
             `;
 
-            L.marker(latlng, { title }).bindPopup(html).addTo(layerGroup);
+            let icon = null;
+            if (type === 'warehouse') {
+                icon = L.divIcon({
+                    className: 'gw-point-icon',
+                    html: '<div class="gw-marker-blob gw-marker-blob--warehouse"><i class="bi bi-shop"></i></div>',
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18],
+                    popupAnchor: [0, -18]
+                });
+            } else if (type === 'destination') {
+                icon = L.divIcon({
+                    className: 'gw-point-icon',
+                    html: '<div class="gw-marker-blob gw-marker-blob--home"><i class="bi bi-house-heart"></i></div>',
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18],
+                    popupAnchor: [0, -18]
+                });
+            }
+
+            L.marker(latlng, { title, icon }).bindPopup(html).addTo(layerGroup);
         });
 
         if (points.length === 1) {
-            map.setView(points[0], 13);
+            map.setView(points[0], 15);
         } else {
-            map.setView([16.047079, 108.206230], 11);
+            map.setView([16.0886, 108.2416], 14);
         }
 
         // Prefer road-following route (OSRM). Fallback to straight line.
@@ -1379,7 +1415,7 @@ include 'includes/header.php';
         }
     }
 
-    map.setView([16.047079, 108.206230], 11);
+    map.setView([16.0886, 108.2416], 14);
     refresh();
     setInterval(refresh, 30000);
 })();

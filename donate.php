@@ -722,17 +722,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['donation_excel']) &&
                     if (count($row) < 7) {
                         continue;
                     }
-                    $name = trim($row[0] ?? '');
+                    $name = trim($row[1] ?? '');
                     if ($name === '') {
                         continue;
                     }
-                    $desc = $row[1] ?? '';
                     $catName = $row[2] ?? '';
-                    $qty = $row[3] ?? 1;
-                    $unit = $row[4] ?? 'cai';
-                    $cond = $row[5] ?? 'good';
-                    $value = $row[6] ?? '';
-                    $imgUrls = $row[7] ?? '';
+                    $desc = $row[3] ?? '';
+                    $qty = $row[4] ?? 1;
+                    $unit = $row[5] ?? 'cai';
+                    $cond = $row[6] ?? 'good';
+                    $value = $row[7] ?? '';
+                    $imgUrls = $row[8] ?? '';
 
                     $catKey = mb_strtolower(trim($catName));
                     $catId = $categoryNameToId[$catKey] ?? 0;
@@ -772,18 +772,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['donation_excel']) &&
                         return preg_replace('/^\xEF\xBB\xBF/', '', $cell);
                     }, $row);
 
-                    $name = trim($row[0] ?? '');
+                    $name = trim($row[1] ?? '');
                     if ($name === '') {
                         continue;
                     }
 
-                    $desc = trim($row[1] ?? '');
                     $catName = trim($row[2] ?? '');
-                    $qty = $row[3] ?? 1;
-                    $unit = $row[4] ?? 'cái';
-                    $cond = $row[5] ?? 'good';
-                    $value = $row[6] ?? '';
-                    $imgUrls = $row[7] ?? '';
+                    $desc = trim($row[3] ?? '');
+                    $qty = $row[4] ?? 1;
+                    $unit = $row[5] ?? 'cái';
+                    $cond = $row[6] ?? 'good';
+                    $value = $row[7] ?? '';
+                    $imgUrls = $row[8] ?? '';
 
                     $catKey = mb_strtolower($catName);
                     $catId = $categoryNameToId[$catKey] ?? 0;
@@ -830,12 +830,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (trim($_POST['action'] ?? '') === '
     if (!$paymentError && $message !== '') {
         $toxicWord = checkToxicTextLocal($message);
         if ($toxicWord !== null) {
-            $paymentError = 'Quyên góp tiền thất bại! Lời nhắn chứa từ ngữ tục tĩu, thô thiển hoặc không phù hợp.';
-        }
-    }
-    if (!$paymentError && $message !== '') {
-        if (checkToxicTextGemini($message)) {
-            $paymentError = 'Quyên góp tiền thất bại! Lời nhắn bị phát hiện vi phạm bởi hệ thống AI.';
+            $paymentError = 'Quyên góp tiền bị từ chối! Từ bị cấm: ' . htmlspecialchars($toxicWord);
+        } else {
+            $geminiCheck = checkToxicTextGemini($message);
+            if ($geminiCheck['violate']) {
+                $paymentError = 'Quyên góp tiền bị từ chối! ' . htmlspecialchars($geminiCheck['reason']);
+            }
         }
     }
 
@@ -1032,24 +1032,16 @@ if (
             $allTextToCheck .= $item['name'] . "\n" . $item['description'] . "\n";
         }
         
-        $textViolate = false;
-        $textRejectReason = '';
         if (trim($allTextToCheck) !== '') {
             // Bước 1: Kiểm tra local (nhanh, không cần API)
             $localMatch = checkToxicTextLocal($allTextToCheck);
             if ($localMatch !== null) {
-                $textViolate = true;
-                $textRejectReason = "Từ bị cấm: " . $localMatch;
-                $globalRejectStatus = 'rejected';
-                $globalRejectNotes = appendModerationReason($globalRejectNotes, $toxicRejectReason . " (phát hiện: $localMatch)");
+                $error = "Quyên góp bị từ chối! Từ bị cấm: " . $localMatch;
             } else {
-                // Bước 2: Kiểm tra Gemini AI (bắt thêm trường hợp local bỏ sót)
+                // Bước 2: Kiểm tra Gemini AI
                 $geminiCheck = checkToxicTextGemini($allTextToCheck);
                 if ($geminiCheck['violate']) {
-                    $textViolate = true;
-                    $textRejectReason = $geminiCheck['reason'];
-                    $globalRejectStatus = 'rejected';
-                    $globalRejectNotes = appendModerationReason($globalRejectNotes, $toxicRejectReason . " (Lý do: " . $geminiCheck['reason'] . ")");
+                    $error = "Quyên góp bị từ chối! " . $geminiCheck['reason'];
                 }
             }
         }
@@ -1072,7 +1064,6 @@ if (
                 $itemRejectNotes = $globalRejectNotes;
 
                 // tải ảnh từ URL (Nhập từ Excel/CSV)
-                $imageViolate = false;
                 if (!empty($item['image_urls'])) {
                     $downloadedImages = downloadItemImagesFromUrls($item['image_urls'], 'uploads/donations/');
                     foreach ($downloadedImages as $imgFile) {
@@ -1081,12 +1072,7 @@ if (
                         $imgCheck = checkNsfwImageGemini($imgPath);
                         if ($imgCheck['violate']) {
                             @unlink($imgPath); // Xóa file tải về nếu vi phạm
-                            $itemRejectStatus = 'rejected';
-                            $globalRejectStatus = 'rejected';
-                            $globalRejectNotes = appendModerationReason($globalRejectNotes, $imgCheck['reason']);
-                            $itemRejectNotes = $globalRejectNotes;
-                            $imageViolate = true;
-                            $imageRejectReason = $imgCheck['reason'];
+                            throw new Exception('Quyên góp bị từ chối! ' . $imgCheck['reason']);
                         } else {
                             $images[] = $imgFile;
                         }
@@ -1118,12 +1104,7 @@ if (
                                 $imgCheck = checkNsfwImageGemini($uploadResult['path']);
                                 if ($imgCheck['violate']) {
                                     @unlink($uploadResult['path']); // Xóa file ngay lập tức
-                                    $itemRejectStatus = 'rejected';
-                                    $globalRejectStatus = 'rejected';
-                                    $globalRejectNotes = appendModerationReason($globalRejectNotes, $imgCheck['reason']);
-                                    $itemRejectNotes = $globalRejectNotes;
-                                    $imageViolate = true;
-                                    $imageRejectReason = $imgCheck['reason'];
+                                    throw new Exception('Quyên góp bị từ chối! ' . $imgCheck['reason']);
                                 } else {
                                     $images[] = $uploadResult['filename'];
                                     // Tự động upload lên Google Drive (nếu đã cấu hình)
@@ -1159,8 +1140,8 @@ if (
                     $pickup_date ?: null,
                     $pickup_time ?: null,
                     $contact_phone,
-                    $itemRejectStatus,
-                    $itemRejectNotes
+                    'pending',
+                    null
                 ]);
 
                 $donation_id = Database::lastInsertId();
@@ -1176,32 +1157,17 @@ if (
             }
 
             Database::commit();
-            if ($globalRejectStatus === 'rejected') {
-                // Xác định loại vi phạm để hiển thị thông báo chuyên nghiệp
-                if (!empty($textViolate) && !empty($imageViolate)) {
-                    $error = 'Quyên góp bị từ chối vì lý do: Từ ngữ (' . htmlspecialchars($textRejectReason) . ') và hình ảnh (' . htmlspecialchars($imageRejectReason) . ') đều không phù hợp.';
-                } elseif (!empty($textViolate)) {
-                    $error = 'Quyên góp bị từ chối vì lý do: ' . htmlspecialchars($textRejectReason);
-                } elseif (!empty($imageViolate)) {
-                    $error = 'Quyên góp bị từ chối vì lý do: ' . (!empty($imageRejectReason) ? htmlspecialchars($imageRejectReason) : 'Hình ảnh không phù hợp với quy định.');
-                } else {
-                    $rejectMessage = trim((string)$globalRejectNotes);
-                    if ($rejectMessage === '') {
-                        $rejectMessage = 'Nội dung quyên góp không phù hợp theo chính sách kiểm duyệt AI.';
-                    }
-                    $error = 'Quyên góp bị từ chối vì lý do: ' . $rejectMessage;
-                }
-                // Không hiển thị success message
-                $success = '';
-            } else {
-                $success = "Quyên góp đã được gửi. Bạn có thể theo dõi trong trang của tôi.";
-                $error = '';
-            }
+            $success = "Quyên góp đã được gửi. Bạn có thể theo dõi trong trang của tôi.";
+            $error = '';
             $_POST = [];
         } catch (Exception $e) {
             Database::rollback();
             error_log("Donation error: " . $e->getMessage());
-            $error = "Có lỗi xảy ra khi gửi quyên góp. Vui llòng thử lỗi.";
+            if (strpos($e->getMessage(), 'Quyên góp bị từ chối') !== false) {
+                $error = $e->getMessage();
+            } else {
+                $error = "Có lỗi xảy ra khi gửi quyên góp. Vui lòng thử lại.";
+            }
         }
     }
 }
@@ -1299,7 +1265,8 @@ include 'includes/header.php';
                             <p class="text-muted text-center mb-3" style="font-size: 0.95rem;">Để nhập nhiều vật phẩm nhanh chóng, hãy sử dụng mẫu sau:</p>
                             <div class="row g-3">
                                 <!-- Download Excel Template -->
-                                <div class="col-md-4">
+                                <!-- Download Excel Template -->
+                                <div class="col-md-6">
                                     <a href="assets/excel/donation_template.xlsx" class="btn btn-lg w-100 modern-btn-download" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; font-weight: 600;" download>
                                         <div class="d-flex flex-column align-items-center">
                                             <i class="bi bi-download fs-4 mb-2"></i>
@@ -1309,19 +1276,8 @@ include 'includes/header.php';
                                     </a>
                                 </div>
 
-                                <!-- Download CSV Template -->
-                                <div class="col-md-4">
-                                    <a href="assets/excel/donation_template.csv" class="btn btn-lg w-100 modern-btn-csv" style="background: linear-gradient(135deg, #06B6D4 0%, #22d3ee 100%); color: white; border: none; font-weight: 600;">
-                                        <div class="d-flex flex-column align-items-center">
-                                            <i class="bi bi-file-earmark-spreadsheet fs-4 mb-2"></i>
-                                            <span class="fw-semibold">Tải mẫu CSV</span>
-                                            <small class="mt-1" style="opacity: 0.85;">UTF-8</small>
-                                        </div>
-                                    </a>
-                                </div>
-
                                 <!-- Upload Excel File -->
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <form id="excel-upload-form" action="" method="post" enctype="multipart/form-data" class="d-inline w-100">
                                         <label class="btn btn-lg w-100 modern-btn-upload mb-0" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; font-weight: 600; cursor: pointer;">
                                             <div class="d-flex flex-column align-items-center">
@@ -1364,10 +1320,10 @@ include 'includes/header.php';
 
                         <?php if ($paymentError): ?>
                             <?php
-                            $isPayModReject = (strpos($paymentError, 'Quyên góp tiền thất bại') !== false);
+                            $isPayModReject = (strpos($paymentError, 'Quyên góp tiền bị từ chối') !== false || strpos($paymentError, 'Quyên góp tiền thất bại') !== false);
                             ?>
                             <?php if ($isPayModReject): ?>
-                                <?= renderModerationError('Quyên góp tiền thất bại', str_replace('Quyên góp tiền thất bại! ', '', $paymentError)) ?>
+                                <?= renderModerationError('Quyên góp tiền bị từ chối', str_replace(['Quyên góp tiền thất bại! ', 'Quyên góp tiền bị từ chối! '], '', $paymentError)) ?>
                             <?php else: ?>
                                 <div class="alert alert-danger" role="alert">
                                     <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($paymentError); ?>
@@ -2125,15 +2081,14 @@ include 'includes/header.php';
         updateRemoveButtons();
 
         // Helper function to build a form block with proper category options
-        function buildItemBlock(idx, data = {}) {
-            const template = container.querySelector('.item-block');
+        function buildItemBlock(idx, data = {}, template = null) {
             let block;
             
             if (template) {
-                // Clone existing template if available
+                // Clone provided template
                 block = template.cloneNode(true);
             } else {
-                // Create new block from scratch
+                // Create new block from scratch (Fallback)
                 block = document.createElement('div');
                 block.className = 'item-block border rounded-3 p-3 mb-3 bg-light position-relative';
                 block.innerHTML = `
@@ -2154,11 +2109,11 @@ include 'includes/header.php';
                     <div class="mb-3"><label class="form-label">Mô tả chi tiết</label><textarea class="form-control" name="description[]" rows="3" placeholder="Mô tả tình trạng, kích thước, màu sắc..."></textarea></div>
                     <div class="row">
                         <div class="col-md-6 mb-3"><label class="form-label">Số lượng *</label><input type="number" class="form-control" name="quantity[]" value="1" min="1" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Đơn vị *</label><select class="form-select" name="unit[]" required><option value="cai">cái</option><option value="chiec">chiếc</option><option value="bo">bộ</option><option value="tui">túi</option><option value="hom">hộm</option></select></div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Đơn vị *</label><select class="form-select" name="unit[]" required><option value="cái">cái</option><option value="chiếc">chiếc</option><option value="bộ">bộ</option><option value="túi">túi</option><option value="hộp">hộp</option><option value="kg">kg</option><option value="cuốn">cuốn</option><option value="thùng">thùng</option></select></div>
                     </div>
-                    <div class="mb-3"><label class="form-label">Tình trạng *</label><select class="form-select" name="condition_status[]" required><option value="excellent">Tuyệt vời</option><option value="good" selected>Tốt</option><option value="fair">Trung bình</option><option value="poor">Yếu</option></select></div>
-                    <div class="mb-3"><label class="form-label">Giá trị dự kiến (VND)</label><input type="number" class="form-control" name="estimated_value[]" placeholder="0" value="0"></div>
-                    <div class="mb-3"><label class="form-label">URL Hình ảnh (phân cách bằng dấu phẩy)</label><textarea class="form-control" name="image_urls[]" rows="2" placeholder="http://example.com/image.jpg"></textarea></div>
+                    <div class="mb-3"><label class="form-label">Tình trạng *</label><select class="form-select" name="condition_status[]" required><option value="new">Mới</option><option value="like_new">Như mới</option><option value="good" selected>Tốt</option><option value="fair">Khá</option><option value="poor">Cũ</option></select></div>
+                    <div class="mb-3"><label class="form-label">Giá trị ước tính (vnd)</label><input type="number" class="form-control" name="estimated_value[]" placeholder="0" value="0"></div>
+                    <div class="mb-3"><label class="form-label">Liên kết ảnh</label><textarea class="form-control" name="image_urls[]" rows="2" placeholder="http://example.com/image.jpg"></textarea></div>
                 `;
             }
             
@@ -2179,15 +2134,15 @@ include 'includes/header.php';
                 
                 // Fill in the data - CORRECT MAPPING
                 const nameEl = block.querySelector('input[name="item_name[]"]');
-                if (nameEl && data[0]) {
-                    nameEl.value = String(data[0]).trim();
+                if (nameEl && data[1]) {
+                    nameEl.value = String(data[1]).trim();
                     console.log('[EXCEL] Set name:', nameEl.value);
                 }
                 
-                // CATEGORY is at index 1 (not 2!)
+                // CATEGORY is at index 2
                 const catSelect = block.querySelector('select[name="category_id[]"]');
-                if (catSelect && data[1]) {
-                    const excelCatName = String(data[1]).trim();
+                if (catSelect && data[2]) {
+                    const excelCatName = String(data[2]).trim();
                     console.log('[EXCEL] Trying to match category: "' + excelCatName + '"');
                     
                     let found = false;
@@ -2209,16 +2164,16 @@ include 'includes/header.php';
                     }
                 }
                 
-                // DESCRIPTION is at index 2 (not 1!)
+                // DESCRIPTION is at index 3
                 const descEl = block.querySelector('textarea[name="description[]"]');
-                if (descEl && data[2]) {
-                    descEl.value = String(data[2]).trim();
+                if (descEl && data[3]) {
+                    descEl.value = String(data[3]).trim();
                     console.log('[EXCEL] Set description:', descEl.value.substring(0, 30));
                 }
                 
                 const qtyEl = block.querySelector('input[name="quantity[]"]');
-                if (qtyEl && data[3]) {
-                    const qty = String(data[3]).trim();
+                if (qtyEl && data[4]) {
+                    const qty = String(data[4]).trim();
                     console.log('[EXCEL] Setting quantity: ' + qty);
                     qtyEl.value = qty || 1;
                 } else if (qtyEl) {
@@ -2226,13 +2181,13 @@ include 'includes/header.php';
                 }
                 
                 const unitSel = block.querySelector('select[name="unit[]"]');
-                if (unitSel && data[4]) {
-                    const excelUnit = String(data[4]).trim().toLowerCase();
+                if (unitSel && data[5]) {
+                    const excelUnit = String(data[5]).trim().toLowerCase();
                     console.log('[EXCEL] Trying to match unit: "' + excelUnit + '"');
                     
                     let found = false;
                     Array.from(unitSel.options).forEach(opt => {
-                        if (opt.value === excelUnit || opt.text.toLowerCase() === excelUnit) {
+                        if (opt.value.toLowerCase() === excelUnit || opt.text.toLowerCase() === excelUnit) {
                             console.log('[EXCEL] Unit matched: ' + opt.value);
                             opt.selected = true;
                             found = true;
@@ -2244,13 +2199,13 @@ include 'includes/header.php';
                 }
                 
                 const condSel = block.querySelector('select[name="condition_status[]"]');
-                if (condSel && data[5]) {
-                    const excelCond = String(data[5]).trim().toLowerCase();
+                if (condSel && data[6]) {
+                    const excelCond = String(data[6]).trim().toLowerCase();
                     console.log('[EXCEL] Trying to match condition: "' + excelCond + '"');
                     
                     let found = false;
                     Array.from(condSel.options).forEach(opt => {
-                        if (opt.value === excelCond) {
+                        if (opt.value.toLowerCase() === excelCond || opt.text.toLowerCase() === excelCond) {
                             console.log('[EXCEL] Condition matched: ' + opt.value);
                             opt.selected = true;
                             found = true;
@@ -2262,8 +2217,8 @@ include 'includes/header.php';
                 }
                 
                 const valEl = block.querySelector('input[name="estimated_value[]"]');
-                if (valEl && data[6]) {
-                    const val = String(data[6]).trim();
+                if (valEl && data[7]) {
+                    const val = String(data[7]).trim();
                     console.log('[EXCEL] Setting value: ' + val);
                     valEl.value = val || 0;
                 } else if (valEl) {
@@ -2271,8 +2226,8 @@ include 'includes/header.php';
                 }
                 
                 const imgEl = block.querySelector('textarea[name="image_urls[]"]');
-                if (imgEl && data[7]) {
-                    const img = String(data[7]).trim();
+                if (imgEl && data[8]) {
+                    const img = String(data[8]).trim();
                     console.log('[EXCEL] Setting images: ' + img);
                     imgEl.value = img;
                 }
@@ -2357,8 +2312,17 @@ include 'includes/header.php';
                         return;
                     }
                     
-                    // First row might be header, ask to confirm
-                    const dataRows = rows.length > 1 ? rows.slice(1) : rows;
+                    // Note: PHP backend already strips the header if detected.
+                    // However, CSV parsing might not strip it depending on encoding.
+                    // Let's do a quick check if the first row is still a header
+                    let dataRows = rows;
+                    if (rows.length > 0) {
+                        const firstCell = String(rows[0][0] || '').toLowerCase();
+                        if (firstCell.includes('tên') || firstCell.includes('name') || firstCell.includes('item')) {
+                            dataRows = rows.slice(1);
+                        }
+                    }
+                    
                     if (dataRows.length === 0) {
                         alert('File chỉ có tiêu đề mà không có dữ liệu vật phẩm.');
                         return;
@@ -2371,11 +2335,17 @@ include 'includes/header.php';
 
                     console.log('[EXCEL UPLOAD] Clearing form and populating with ' + dataRows.length + ' items');
                     
+                    // Capture a valid template before clearing so we have the category options
+                    let validTemplate = container.querySelector('.item-block');
+                    if (validTemplate) {
+                        validTemplate = validTemplate.cloneNode(true);
+                    }
+                    
                     // Clear container and rebuild
                     container.innerHTML = '';
                     dataRows.forEach((rowData, idx) => {
                         console.log('[EXCEL UPLOAD] Processing row ' + (idx + 1), rowData);
-                        const block = buildItemBlock(idx, rowData);
+                        const block = buildItemBlock(idx, rowData, validTemplate);
                         container.appendChild(block);
                     });
                     

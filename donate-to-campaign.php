@@ -363,11 +363,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
     if (!$error && $message !== '') {
         $toxicWord = checkToxicTextLocal($message);
         if ($toxicWord !== null) {
-            $error = 'Quyên góp thất bại! Lời nhắn chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+            $error = 'Quyên góp bị từ chối! Từ bị cấm: ' . htmlspecialchars($toxicWord);
         } else {
             $geminiCheck = checkToxicTextGemini($message);
             if ($geminiCheck['violate']) {
-                $error = 'Quyên góp thất bại! Lời nhắn bị từ chối: ' . htmlspecialchars($geminiCheck['reason']);
+                $error = 'Quyên góp bị từ chối! ' . htmlspecialchars($geminiCheck['reason']);
             }
         }
     }
@@ -532,19 +532,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
             $error = 'S? di?n tho?i ph?i cï¿½ ï¿½t nh?t 10 ch? s?.';
         } elseif (empty($product_condition)) {
             $error = 'Vui lï¿½ng ch?n tï¿½nh tr?ng s?n ph?m.';
+        } elseif (!empty($pickup_date) && !empty($campaign['start_date']) && strtotime($pickup_date) >= strtotime($campaign['start_date'])) {
+            $error = 'Ngày nhận hàng phải trước ngày bắt đầu chiến dịch (' . date('d/m/Y', strtotime($campaign['start_date'])) . ').';
         }
     } 
 
     // === KIỂM DUYỆT NỘI DUNG VẬT PHẨM ===
     if (!$error) {
-        $allText = $item_name . ' ' . $description;
+        $allText = $item_name . ' ' . $description . ' ' . $pickup_address . ' ' . $condition_detail;
         $toxicWord = checkToxicTextLocal($allText);
         if ($toxicWord !== null) {
-            $error = 'Quyên góp thất bại! Tên hoặc mô tả vật phẩm chứa từ ngữ không phù hợp (phát hiện: ' . htmlspecialchars($toxicWord) . ').';
+            $error = 'Quyên góp bị từ chối! Từ bị cấm: ' . htmlspecialchars($toxicWord);
         } else {
             $geminiCheck = checkToxicTextGemini($allText);
             if ($geminiCheck['violate']) {
-                $error = 'Quyên góp thất bại! Nội dung bị từ chối: ' . htmlspecialchars($geminiCheck['reason']);
+                $error = 'Quyên góp bị từ chối! ' . htmlspecialchars($geminiCheck['reason']);
             }
         }
     }
@@ -579,7 +581,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
                                 $imgCheck = checkNsfwImageGemini($fullPath);
                                 if ($imgCheck['violate']) {
                                     @unlink($fullPath);
-                                    throw new Exception('Quyên góp thất bại! ' . $imgCheck['reason']);
+                                    throw new Exception('Quyên góp bị từ chối! ' . $imgCheck['reason']);
                                 }
                             }
                             $images[] = $uploadResult['filename'];
@@ -695,7 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && trim((string)($_POST['action'] ?? '
         } catch (Exception $e) {
             Database::rollback();
             error_log("Donate to campaign error: " . $e->getMessage());
-            if (strpos($e->getMessage(), 'Quyên góp thất bại') !== false) {
+            if (strpos($e->getMessage(), 'Quyên góp bị từ chối') !== false || strpos($e->getMessage(), 'Quyên góp thất bại') !== false) {
                 $error = $e->getMessage();
             } else {
                 $error = 'Có lỗi xảy ra. Vui lòng thử lại.';
@@ -852,10 +854,10 @@ include 'includes/header.php';
 
             <?php if ($error): ?>
                 <?php
-                $isModReject = (strpos($error, 'Quyên góp thất bại') !== false);
+                $isModReject = (strpos($error, 'Quyên góp bị từ chối') !== false || strpos($error, 'Quyên góp thất bại') !== false);
                 ?>
                 <?php if ($isModReject): ?>
-                    <?= renderModerationError('Quyên góp thất bại', str_replace('Quyên góp thất bại! ', '', $error)) ?>
+                    <?= renderModerationError('Quyên góp bị từ chối', str_replace(['Quyên góp thất bại! ', 'Quyên góp bị từ chối! '], '', $error)) ?>
                 <?php else: ?>
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <i class="bi bi-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
@@ -949,7 +951,7 @@ include 'includes/header.php';
                             <div class="mb-3">
                                 <label for="quantity_campaign" class="form-label">Số lượng góp <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number" class="form-control" id="quantity_campaign" name="quantity" min="1" value="1" required>
+                                    <input type="number" class="form-control" id="quantity_campaign" name="quantity" min="1" value="1">
                                     <span class="input-group-text" id="unitDisplay">cái</span>
                                 </div>
                             </div>
@@ -970,11 +972,11 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="item_name" class="form-label">Tên vật phẩm <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="item_name" name="item_name" placeholder="VD: Sách, Quần áo..." required>
+                                <input type="text" class="form-control" id="item_name" name="item_name" placeholder="VD: Sách, Quần áo...">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="quantity_custom" class="form-label">Số lượng <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="quantity_custom" name="quantity" min="1" value="1" required>
+                                <input type="number" class="form-control" id="quantity_custom" name="quantity" min="1" value="1">
                             </div>
                         </div>
 
@@ -1057,7 +1059,13 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Ngày Tháng Năm</label>
-                                <input type="date" class="form-control" id="pickup_date" name="pickup_date" value="<?php echo htmlspecialchars($_POST['pickup_date'] ?? ''); ?>" min="<?php echo date('Y-m-d'); ?>">
+                                <?php
+                                $maxDateStr = '';
+                                if (!empty($campaign['start_date'])) {
+                                    $maxDateStr = date('Y-m-d', strtotime($campaign['start_date'] . ' -1 day'));
+                                }
+                                ?>
+                                <input type="date" class="form-control" id="pickup_date" name="pickup_date" value="<?php echo htmlspecialchars($_POST['pickup_date'] ?? ''); ?>" min="<?php echo date('Y-m-d'); ?>" <?php echo $maxDateStr ? 'max="'.$maxDateStr.'"' : ''; ?> data-start-date="<?php echo htmlspecialchars($campaign['start_date'] ?? ''); ?>">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Giờ nhận hàng</label>
@@ -1429,9 +1437,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const quantityInput = document.querySelector('input[name="quantity"]');
             const quantity = quantityInput ? quantityInput.value : '0';
 
-            if (donateType === 'campaign_item' && !document.getElementById('campaign_item_id').value) {
+            const campaignItemIdEl = document.getElementById('campaign_item_id');
+            if (donateType === 'campaign_item' && (!campaignItemIdEl || !campaignItemIdEl.value)) {
                 e.preventDefault();
-                alert('Vui lòng chọn vật phẩm cần góp');
+                alert('Vui lòng chọn vật phẩm cần góp hoặc chuyển sang Góp vật phẩm khác');
                 return false;
             }
 
@@ -1457,6 +1466,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 alert('Vui lòng nhập số điện thoại liên hệ');
                 return false;
+            }
+
+            const pickupDateEl = document.getElementById('pickup_date');
+            if (pickupDateEl && pickupDateEl.value) {
+                const pickupDate = new Date(pickupDateEl.value);
+                const startDateStr = pickupDateEl.getAttribute('data-start-date');
+                if (startDateStr) {
+                    const startDate = new Date(startDateStr);
+                    pickupDate.setHours(0,0,0,0);
+                    startDate.setHours(0,0,0,0);
+                    if (pickupDate >= startDate) {
+                        e.preventDefault();
+                        alert('Ngày tháng năm phải trước ngày bắt đầu chiến dịch (' + startDate.toLocaleDateString('vi-VN') + ')');
+                        return false;
+                    }
+                }
             }
         });
     }

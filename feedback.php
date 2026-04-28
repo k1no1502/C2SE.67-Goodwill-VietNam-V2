@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/moderation.php';
 
 $pageTitle = "Gửi phản hồi";
 $success = '';
@@ -42,18 +43,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Đánh giá phải từ 1 đến 5 sao.';
     }
 
+    // === AI TEXT MODERATION ===
+    if (empty($error)) {
+        $toxicWord = checkToxicTextLocal($subject . ' ' . $content);
+        if ($toxicWord !== null) {
+            $error = renderModerationError('Từ bị cấm: ' . htmlspecialchars($toxicWord), 'Phản hồi bị từ chối');
+        } else {
+            $geminiCheck = checkToxicTextGemini($subject . ' ' . $content);
+            if ($geminiCheck['violate']) {
+                $error = renderModerationError($geminiCheck['reason'], 'Phản hồi bị từ chối');
+            }
+        }
+    }
+
+    // === AI IMAGE MODERATION & UPLOAD ===
+    $uploadedImages = [];
+    if (empty($error) && !empty($_FILES['feedback_images']['name'][0])) {
+        $files = $_FILES['feedback_images'];
+        $fileCount = count($files['name']);
+        for ($i = 0; $i < $fileCount; $i++) {
+            if ($files['error'][$i] === UPLOAD_ERR_OK) {
+                $tmpPath = $files['tmp_name'][$i];
+                $imgCheck = checkToxicImageGemini($tmpPath);
+                if ($imgCheck['violate']) {
+                    $error = renderModerationError($imgCheck['reason'], 'Phản hồi bị từ chối');
+                    break;
+                }
+                
+                $fileArr = [
+                    'name' => $files['name'][$i],
+                    'type' => $files['type'][$i],
+                    'tmp_name' => $files['tmp_name'][$i],
+                    'error' => $files['error'][$i],
+                    'size' => $files['size'][$i]
+                ];
+                $res = uploadFile($fileArr);
+                if ($res['success']) {
+                    $uploadedImages[] = '/uploads/' . $res['filename'];
+                } else {
+                    $error = $res['message'];
+                    break;
+                }
+            }
+        }
+    }
+
     if (empty($error)) {
         try {
+            $imageUrlsStr = !empty($uploadedImages) ? implode(',', $uploadedImages) : null;
             Database::execute(
-                "INSERT INTO feedback (user_id, name, email, subject, content, rating, status, created_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())",
+                "INSERT INTO feedback (user_id, name, email, subject, content, rating, status, image_urls, created_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NOW())",
                 [
                     isLoggedIn() ? $_SESSION['user_id'] : null,
                     $name,
                     $email,
                     $subject,
                     $content,
-                    $rating > 0 ? $rating : null
+                    $rating > 0 ? $rating : null,
+                    $imageUrlsStr
                 ]
             );
 
@@ -68,12 +116,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include 'includes/header.php';
 ?>
 
+<!-- Hero Banner -->
+<div class="py-5 text-white" style="background-color: #177385;">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-2 text-center text-md-end mb-4 mb-md-0">
+                <div class="d-inline-block rounded-4 p-4" style="background-color: rgba(255,255,255,0.15);">
+                    <i class="bi bi-chat-left-text" style="font-size: 4rem;"></i>
+                </div>
+            </div>
+            <div class="col-md-10 text-center text-md-start">
+                <h1 class="display-4 fw-bold mb-2">Gửi phản hồi</h1>
+                <p class="lead mb-0">Chia sẻ ý kiến của bạn để giúp chúng tôi phục vụ cộng đồng tốt hơn</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container py-5">
     <div class="row">
         <div class="col-lg-8 mx-auto">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-success text-white">
-                    <h4 class="mb-0"><i class="bi bi-chat-dots me-2"></i>Gửi phản hồi</h4>
+            <div class="card shadow-sm border-0 mb-4" style="border-top: 4px solid #177385 !important;">
+                <div class="card-header bg-white border-0 py-3">
+                    <h4 class="mb-0" style="color: #177385;"><i class="bi bi-pencil-square me-2"></i>Nội dung phản hồi</h4>
                 </div>
                 <div class="card-body p-4">
                     <?php if (!empty($success)): ?>
@@ -81,10 +146,14 @@ include 'includes/header.php';
                     <?php endif; ?>
 
                     <?php if (!empty($error)): ?>
-                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                        <?php if (strpos($error, 'alert-heading') !== false): ?>
+                            <?php echo $error; ?>
+                        <?php else: ?>
+                            <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                        <?php endif; ?>
                     <?php endif; ?>
 
-                    <form method="POST" class="row g-3">
+                    <form method="POST" class="row g-3" enctype="multipart/form-data">
                         <div class="col-md-6">
                             <label class="form-label">Họ và tên *</label>
                             <input type="text"
@@ -127,8 +196,12 @@ include 'includes/header.php';
                                 <?php endfor; ?>
                             </select>
                         </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-success btn-lg">
+                        <div class="col-md-8">
+                            <label class="form-label">Hình ảnh đính kèm (tùy chọn)</label>
+                            <input type="file" class="form-control" name="feedback_images[]" multiple accept="image/*">
+                        </div>
+                        <div class="col-12 mt-4">
+                            <button type="submit" class="btn text-white btn-lg px-4" style="background-color: #177385;">
                                 <i class="bi bi-send me-2"></i>Gửi phản hồi
                             </button>
                         </div>
