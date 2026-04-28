@@ -1,13 +1,19 @@
 <?php
+// Bắt đầu session để lưu trữ thông tin người dùng
 session_start();
+
+// Kết nối cơ sở dữ liệu và các hàm tiện ích
 require_once 'config/database.php';
 require_once 'includes/functions.php';
 
+// Kiểm tra người dùng đã đăng nhập hay chưa
 requireLogin();
 
-$pageTitle = "Gi? hng";
+// Tiêu đề trang hiển thị trên trình duyệt
+$pageTitle = "Giỏ hàng";
 
-// Get cart items with explicit columns to avoid name collisions (cart quantity vs inventory quantity)
+// Lấy danh sách sản phẩm trong giỏ hàng từ cơ sở dữ liệu
+// Truy vấn SQL để lấy thông tin chi tiết của từng sản phẩm
 $sql = "SELECT 
             c.cart_id,
             c.user_id,
@@ -33,8 +39,8 @@ $sql = "SELECT
         ORDER BY c.created_at DESC";
 $cartItems = Database::fetchAll($sql, [$_SESSION['user_id'], $_SESSION['user_id']]);
 
-// Calculate totals cho tiền + tóm tắt
-$totalAmount       = 0;
+// Tính toán tổng số lượng và giá trị của các sản phẩm trong giỏ hàng
+$totalAmount       = 0; // Tổng tiền
 $totalLines        = count($cartItems);   // Số dòng sản phẩm (loại sản phẩm)
 $totalFreeLines    = 0;                   // Số dòng sản phẩm miễn phí
 $totalPaidLines    = 0;                   // Số dòng sản phẩm trả phí
@@ -56,10 +62,12 @@ foreach ($cartItems as $item) {
     }
 }
 
+// Bao gồm header của trang
 include 'includes/header.php';
 ?>
 
 <style>
+    /* Phần CSS để định dạng giao diện giỏ hàng */
     .cart-shell {
         margin-top: 5rem;
         margin-bottom: 2rem;
@@ -244,9 +252,9 @@ include 'includes/header.php';
     }
 </style>
 
-<!-- Main Content -->
+<!-- Nội dung chính của trang giỏ hàng -->
 <div class="container cart-shell">
-    <!-- Page Header -->
+    <!-- Tiêu đề trang -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="cart-hero">
@@ -259,7 +267,7 @@ include 'includes/header.php';
     </div>
 
     <?php if (empty($cartItems)): ?>
-        <!-- Empty Cart -->
+        <!-- Hiển thị khi giỏ hàng trống -->
         <div class="row justify-content-center">
             <div class="col-lg-9 col-xl-7">
                 <div class="text-center empty-cart">
@@ -273,8 +281,9 @@ include 'includes/header.php';
             </div>
         </div>
     <?php else: ?>
+        <!-- Hiển thị danh sách sản phẩm trong giỏ hàng -->
         <div class="row">
-            <!-- Cart Items -->
+            <!-- Danh sách sản phẩm -->
             <div class="col-lg-8">
                 <div class="cart-main-card">
                     <div class="cart-main-head d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -310,7 +319,7 @@ include 'includes/header.php';
                             ?>
                             <div class="cart-item" data-cart-id="<?php echo $item['cart_id']; ?>">
                                 <div class="row align-items-center g-3">
-                                    <!-- Product Image -->
+                                    <!-- Hình ảnh sản phẩm -->
                                     <div class="col-md-2 col-4">
                                         <div class="product-image">
                                             <img src="<?php echo htmlspecialchars($firstImage); ?>" 
@@ -321,7 +330,7 @@ include 'includes/header.php';
                                         </div>
                                     </div>
                                     
-                                    <!-- Product Info -->
+                                    <!-- Thông tin sản phẩm -->
                                     <div class="col-md-3 col-8">
                                         <div class="product-info">
                                             <h6 class="mb-2"><?php echo htmlspecialchars($item['item_name']); ?></h6>
@@ -340,215 +349,16 @@ include 'includes/header.php';
                                         </div>
                                     </div>
                                     
-                                    <!-- Price -->
+                                    <!-- Giá -->
                                     <div class="col-md-2 col-6 text-center">
                                         <p class="text-muted small mb-1">Đơn giá</p>
                                         <p class="price-display mb-0"><?php echo $priceDisplay; ?></p>
                                     </div>
                                     
-                                    <!-- Quantity -->
+                                    <!-- Số lượng -->
                                     <div class="col-md-2 col-6">
                                         <p class="text-muted small mb-1 text-center">Số lượng</p>
                                         <div class="input-group input-group-sm qty-input-group mx-auto">
                                             <button class="btn update-quantity" 
                                                     data-action="decrease"
                                                 data-cart-id="<?php echo $item['cart_id']; ?>"
-                                                <?php echo $item['cart_quantity'] <= 1 ? 'disabled' : ''; ?>>
-                                                <i class="bi bi-dash"></i>
-                                            </button>
-                                            <input type="text" 
-                                                   class="form-control quantity-display" 
-                                                   value="<?php echo $item['cart_quantity']; ?>" 
-                                                   readonly>
-                                            <button class="btn update-quantity" 
-                                                    data-action="increase"
-                                                    data-cart-id="<?php echo $item['cart_id']; ?>"
-                                                    data-max="<?php echo max(1, $item['available_quantity']); ?>"
-                                                    <?php echo $item['cart_quantity'] >= max(1, $item['available_quantity']) ? 'disabled' : ''; ?>>
-                                                <i class="bi bi-plus"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Total -->
-                                    <div class="col-md-2 col-6 text-center">
-                                        <p class="text-muted small mb-1">Tổng</p>
-                                        <p class="price-display mb-0">
-                                            <?php echo $item['price_type'] === 'free' ? 'Miễn phí' : number_format($itemTotal) . ' VNĐ'; ?>
-                                        </p>
-                                    </div>
-                                    
-                                    <!-- Delete Button -->
-                                    <div class="col-md-1 col-6 text-center">
-                                        <button class="btn-delete-item remove-item" 
-                                                data-cart-id="<?php echo $item['cart_id']; ?>"
-                                                title="Xóa khỏi giỏ hàng">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Order Summary -->
-            <div class="col-lg-4">
-                <div class="cart-summary-card sticky-top" style="top: 96px;">
-                    <div class="cart-summary-head">
-                        <h5 class="mb-0 fw-bold">
-                            <i class="bi bi-receipt me-2"></i>Tóm tắt đơn hàng
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- Order Details -->
-                        <div class="mb-4">
-                            <div class="d-flex justify-content-between mb-3">
-                                <span class="text-muted">Tổng sản phẩm:</span>
-                                <strong class="text-dark"><?php echo $totalLines; ?> sản phẩm</strong>
-                            </div>
-                            <div class="d-flex justify-content-between mb-3">
-                                <span class="text-muted">Sản phẩm miễn phí:</span>
-                                <span class="fw-bold" style="color: #10b981;"><?php echo $totalFreeLines; ?> sản phẩm</span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-3">
-                                <span class="text-muted">Sản phẩm trả phí:</span>
-                                <span class="fw-bold" style="color: #fbbf24;"><?php echo $totalPaidLines; ?> sản phẩm</span>
-                            </div>
-                            <hr style="border-color: #f0f9ff;">
-                            <div class="d-flex justify-content-between">
-                                <span class="fw-bold text-dark">Tổng cộng:</span>
-                                <span class="cart-total">
-                                    <?php echo $totalAmount > 0 ? number_format($totalAmount) . ' VNĐ' : 'Miễn phí'; ?>
-                                </span>
-                            </div>
-                        </div>
-                        
-                        <!-- Checkout Button -->
-                        <div class="d-grid gap-2 mb-3">
-                            <a href="checkout.php" class="btn btn-lg btn-checkout">
-                                <i class="bi bi-credit-card me-2"></i>Thanh toán
-                            </a>
-                            <a href="shop.php" class="btn btn-outline-primary cart-link-btn">
-                                <i class="bi bi-arrow-left me-2"></i>Tiếp tục mua sắm
-                            </a>
-                        </div>
-                        
-                        <!-- Security Info -->
-                        <div class="p-3 security-box">
-                            <h6 class="text-dark mb-2" style="color: #0e7490;">
-                                <i class="bi bi-shield-check me-1"></i>Bảo mật
-                            </h6>
-                            <small class="text-muted">
-                                • Thông tin thanh toán được mã hóa<br>
-                                • Giao hàng tận nơi miễn phí<br>
-                                • Hỗ trợ 24/7
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
-</div>
-
-<script>
-// Update quantity
-document.addEventListener('DOMContentLoaded', function() {
-    const updateButtons = document.querySelectorAll('.update-quantity');
-    const removeButtons = document.querySelectorAll('.remove-item');
-    
-    updateButtons.forEach((button) => {
-        button.addEventListener('click', function() {
-            const action = this.dataset.action;
-            const cartId = this.dataset.cartId;
-            const max = parseInt(this.dataset.max) || 999;
-            const row = this.closest('.cart-item');
-            const quantityDisplay = row.querySelector('.quantity-display');
-            const currentQty = parseInt(quantityDisplay.value);
-            
-            let newQty = currentQty;
-            
-            if (action === 'increase') {
-                newQty = Math.min(currentQty + 1, max);
-            } else if (action === 'decrease') {
-                newQty = Math.max(currentQty - 1, 1);
-            }
-            if (newQty === currentQty) {
-                return;
-            }
-            
-            // Update quantity
-            fetch('api/update-cart-quantity.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    cart_id: cartId,
-                    quantity: newQty
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    quantityDisplay.value = newQty;
-                    
-                    // Update buttons
-                    const decreaseBtn = row.querySelector('[data-action="decrease"]');
-                    const increaseBtn = row.querySelector('[data-action="increase"]');
-                    
-                    decreaseBtn.disabled = newQty <= 1;
-                    increaseBtn.disabled = newQty >= max;
-                    
-                    // Reload page to update totals
-                    location.reload();
-                } else {
-                    alert('Lỗi: ' + (data.message || 'Không thể cập nhật số lượng'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Có lỗi xảy ra khi cập nhật số lượng');
-            });
-        });
-    });
-    
-    // Remove item
-    removeButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const cartId = this.dataset.cartId;
-            const row = this.closest('.cart-item');
-            
-            if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi giỏ hàng?')) {
-                fetch('api/remove-from-cart.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        cart_id: cartId
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        row.remove();
-                        location.reload();
-                    } else {
-                        alert('Lỗi: ' + (data.message || 'Không thể xóa sản phẩm'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Có lỗi xảy ra khi xóa sản phẩm');
-                });
-            }
-        });
-    });
-});
-</script>
-
-<?php include 'includes/footer.php'; ?>
-
